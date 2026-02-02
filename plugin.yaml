@@ -1,0 +1,14 @@
+name: resources
+version: "0.0.1"
+usage: Show deployment resources for helm releases
+description: "Display resource requests and limits for all deployments in a helm release"
+useTunnel: true
+platformCommand:
+  - command: ${HELM_PLUGIN_DIR}/bin/resources
+platformHooks:
+  install:
+    - command: ${HELM_PLUGIN_DIR}/install-binary.sh
+  update:
+    - command: ${HELM_PLUGIN_DIR}/install-binary.sh
+      args:
+        - -u
