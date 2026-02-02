@@ -100,8 +100,8 @@ mkTempDir() {
   HELM_TMP="$(mktemp -d -t "${PROJECT_NAME}-XXXXXX")"
 }
 rmTempDir() {
-  if [ -d "${HELM_TMP:-/tmp/helm-lock-tmp}" ]; then
-    rm -rf "${HELM_TMP:-/tmp/helm-lock-tmp}"
+  if [ -d "${HELM_TMP:-/tmp/helm-resources-tmp}" ]; then
+    rm -rf "${HELM_TMP:-/tmp/helm-resources-tmp}"
   fi
 }
 
@@ -125,7 +125,7 @@ downloadFile() {
 # installs it.
 installFile() {
   tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
-  HELM_TMP_BIN="$HELM_TMP/lock/bin/resources"
+  HELM_TMP_BIN="$HELM_TMP/resources/bin/resources"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
   fi

@@ -5,6 +5,7 @@
 #
 bin/
 docs/
+dist/
 hack/
 Dockerfile
 
