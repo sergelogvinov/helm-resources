@@ -1,33 +1,16 @@
-REGISTRY ?= ghcr.io
-USERNAME ?= sergelogvinov
-PROJECT ?= helm-resources
-IMAGE ?= $(REGISTRY)/$(USERNAME)/$(PROJECT)
-HELMREPO ?= $(REGISTRY)/$(USERNAME)/charts
-PLATFORM ?= linux/arm64,linux/amd64
-PUSH ?= false
+HELM_HOME ?= $(shell helm env HELM_DATA_HOME)
 
 VERSION ?= $(shell git describe --dirty --tag --match='v*')
 SHA ?= $(shell git describe --match=none --always --abbrev=7 --dirty)
-TAG ?= $(VERSION)
 
 GO_LDFLAGS := -s -w
-GO_LDFLAGS += -X k8s.io/component-base/version.gitVersion=$(VERSION)
+GO_LDFLAGS += -X github.com/sergelogvinov/helm-resources/cmd.Version=$(VERSION)
 
 OS ?= $(shell go env GOOS)
 ARCH ?= $(shell go env GOARCH)
 ARCHS = amd64 arm64
 
 TESTARGS ?= "-v"
-
-BUILD_ARGS := --platform=$(PLATFORM)
-ifeq ($(PUSH),true)
-BUILD_ARGS += --push=$(PUSH)
-BUILD_ARGS += --output type=image,annotation-index.org.opencontainers.image.source="https://github.com/$(USERNAME)/$(PROJECT)",annotation-index.org.opencontainers.image.description="Helm resource plugin"
-else
-BUILD_ARGS += --output type=docker
-endif
-
-COSING_ARGS ?=
 
 ############
 
@@ -92,31 +75,8 @@ conformance: ## Conformance
 	docker run --rm -it -v $(PWD):/src -w /src ghcr.io/siderolabs/conform:v0.1.0-alpha.30 enforce
 
 ############
-#
-# Docker Abstractions
-#
 
-docker-init:
-	@docker run --rm --privileged multiarch/qemu-user-static -p yes ||:
-
-	@docker context create multiarch ||:
-	@docker buildx create --name multiarch --driver docker-container --use ||:
-	@docker context use multiarch
-	@docker buildx inspect --bootstrap multiarch
-
-.PHONY: images
-images: ## Build images
-	docker buildx build $(BUILD_ARGS) \
-		--build-arg VERSION="$(VERSION)" \
-		--build-arg TAG="$(TAG)" \
-		--build-arg SHA="$(SHA)" \
-		-t $(IMAGE):$(TAG) \
-		-f Dockerfile .
-
-.PHONY: images-checks
-images-checks: images
-	trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL --no-progress $(IMAGE):$(TAG)
-
-.PHONY: images-cosign
-images-cosign:
-	@cosign sign --yes $(COSING_ARGS) --recursive $(IMAGE):$(TAG)
+install: build
+	mkdir -p $(HELM_HOME)/plugins/helm-resources/bin
+	cp bin/helm-resources-$(ARCH) $(HELM_HOME)/plugins/helm-resources/bin/resources
+	cp plugin.yaml $(HELM_HOME)/plugins/helm-resources/

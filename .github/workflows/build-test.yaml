@@ -35,6 +35,7 @@ jobs:
         with:
           version: v2.8.0
           args: --timeout=5m --config=.golangci.yml
+
       - name: Unit
         run: make unit
       - name: Build
