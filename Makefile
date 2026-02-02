@@ -44,7 +44,7 @@ build-all-archs:
 
 .PHONY: clean
 clean: ## Clean
-	rm -rf bin
+	rm -rf bin/ dist/
 
 .PHONY: build
 build: ## Build
