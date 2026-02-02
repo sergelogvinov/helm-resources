@@ -89,9 +89,9 @@ verifySupported() {
 getDownloadURL() {
   version=$(git -C "$HELM_PLUGIN_DIR" describe --tags --exact-match 2>/dev/null || :)
   if [ "$SCRIPT_MODE" = "install" ] && [ -n "$version" ]; then
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$version/helm-lock-$OS-$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/download/$version/helm-resources-$OS-$ARCH.tgz"
   else
-    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/latest/download/helm-lock-$OS-$ARCH.tgz"
+    DOWNLOAD_URL="https://github.com/$PROJECT_GH/releases/latest/download/helm-resources-$OS-$ARCH.tgz"
   fi
 }
 
@@ -125,7 +125,7 @@ downloadFile() {
 # installs it.
 installFile() {
   tar xzf "$PLUGIN_TMP_FILE" -C "$HELM_TMP"
-  HELM_TMP_BIN="$HELM_TMP/lock/bin/lock"
+  HELM_TMP_BIN="$HELM_TMP/lock/bin/resources"
   if [ "${OS}" = "windows" ]; then
     HELM_TMP_BIN="$HELM_TMP_BIN.exe"
   fi
@@ -140,7 +140,7 @@ exit_trap() {
   rmTempDir
   if [ "$result" != "0" ]; then
     echo "Failed to install $PROJECT_NAME"
-    printf '\tFor support, go to https://github.com/sergelogvinov/helm-lock.\n'
+    printf '\tFor support, go to https://github.com/sergelogvinov/helm-resources\n'
   fi
   exit $result
 }
