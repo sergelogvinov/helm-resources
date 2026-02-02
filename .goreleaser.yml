@@ -22,9 +22,9 @@ builds:
 
 archives:
   - id: default
-    builds:
+    ids:
       - default
-    format: tgz
+    formats: ["tgz"]
     name_template: '{{ .ProjectName }}-{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     wrap_in_directory: resources
     files:
