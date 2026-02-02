@@ -3,6 +3,18 @@
 A Helm plugin that displays resource requests and limits for all workloads in a helm release.
 It also shows current resource usage and provides recommendations for under-provisioned containers.
 
+## Motivation
+
+I deploy applications using Helm charts in most cases, so it is crucial to ensure that resource requests and limits are properly configured for each workload.
+This allows the Kubernetes scheduler to make better decisions about how to distribute workloads across cluster nodes.
+It also helps node autoscalers or Karpenter, to scale the cluster based on actual resource usage.
+
+However, application code is constantly evolving: new features are added, and resource consumption patterns change over time.
+What was an appropriate configuration for resource requests and limits a month ago may no longer be sufficient today.
+
+This plugin helps identify such issues by comparing real-time resource usage with the configured requests and limits,
+and provides recommendations for adjusting them when necessary.
+
 ## Installation
 
 ```bash
