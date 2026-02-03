@@ -22,7 +22,6 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/sergelogvinov/helm-resources/pkg/recommend"
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
 
 	"sigs.k8s.io/yaml"
@@ -31,6 +30,8 @@ import (
 const none = "<none>"
 
 func outputTable(resources []resources.ResourceInfo) error {
+	fmt.Printf("\nRESOURCES:\n\n")
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "KIND\tNAME\tREPLICAS\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
 
@@ -49,12 +50,50 @@ func outputTable(resources []resources.ResourceInfo) error {
 			usageInfo)
 	}
 
-	err := w.Flush()
+	return w.Flush()
+}
+
+func outputJSON(resources []resources.ResourceInfo) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+
+	return encoder.Encode(resources)
+}
+
+func outputYAML(resources []resources.ResourceInfo) error {
+	yamlData, err := yaml.Marshal(resources)
 	if err != nil {
 		return err
 	}
 
-	analyzeAndPrintRecommendations(resources)
+	fmt.Print(string(yamlData))
+
+	return nil
+}
+
+func outputTableRecommendations(recommendations []resources.ResourceRecommendation) error {
+	if len(recommendations) > 0 {
+		fmt.Printf("\nRESOURCE RECOMMENDATIONS:\n\n")
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/Memory)\tLIMITS (CPU/Memory)\tCURRENT (CPU/Memory)\n")
+
+		for _, rec := range recommendations {
+			requestsInfo := formatResourceValues(rec.RecommendedCPURequest, rec.RecommendedMemRequest)
+			limitsInfo := formatResourceValues(rec.RecommendedCPULimit, rec.RecommendedMemLimit)
+			usageInfo := formatResourceValues(rec.CPUUsage, rec.MemUsage)
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				rec.Kind,
+				rec.Name,
+				rec.Container,
+				requestsInfo,
+				limitsInfo,
+				usageInfo)
+		}
+
+		return w.Flush()
+	}
 
 	return nil
 }
@@ -97,50 +136,4 @@ func formatMemory(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%d", bytes)
-}
-
-func outputJSON(resources []resources.ResourceInfo) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(resources)
-}
-
-func outputYAML(resources []resources.ResourceInfo) error {
-	yamlData, err := yaml.Marshal(resources)
-	if err != nil {
-		return err
-	}
-
-	fmt.Print(string(yamlData))
-
-	return nil
-}
-
-func analyzeAndPrintRecommendations(resources []resources.ResourceInfo) {
-	recommendations := recommend.AnalyzeRecommendations(resources)
-
-	if len(recommendations) > 0 {
-		fmt.Printf("\nRESOURCE RECOMMENDATIONS:\n\n")
-
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/Memory)\tLIMITS (CPU/Memory)\tCURRENT (CPU/Memory)\n")
-
-		for _, rec := range recommendations {
-			recommendedCPU := formatCPU(rec.RecommendedCPURequest)
-			recommendedMem := formatMemory(rec.RecommendedMemRequest)
-			recommendedRequests := fmt.Sprintf("%s/%s", recommendedCPU, recommendedMem)
-
-			recommendedCPULimit := formatCPU(rec.RecommendedCPULimit)
-			recommendedMemLimit := formatMemory(rec.RecommendedMemLimit)
-			recommendedLimits := fmt.Sprintf("%s/%s", recommendedCPULimit, recommendedMemLimit)
-
-			currentUsage := fmt.Sprintf("%s/%s", formatCPU(rec.CPUUsage), formatMemory(rec.MemUsage))
-
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				rec.Kind, rec.Name, rec.Container, recommendedRequests, recommendedLimits, currentUsage)
-		}
-
-		w.Flush() //nolint:errcheck
-	}
 }

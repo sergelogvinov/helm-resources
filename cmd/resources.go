@@ -31,6 +31,8 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 
 	"github.com/sergelogvinov/helm-resources/pkg/metrics"
+	"github.com/sergelogvinov/helm-resources/pkg/patch"
+	"github.com/sergelogvinov/helm-resources/pkg/recommend"
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,6 +64,7 @@ func newResourcesCommand() *cobra.Command {
 			"  helm resources my-release",
 			"  helm resources my-release --namespace production",
 			"  helm resources my-release -o json",
+			"  helm resources my-release --apply-to-values values.yaml",
 		}, "\n"),
 		Args: cobra.ExactArgs(1),
 		RunE: runResources,
@@ -72,6 +75,7 @@ func newResourcesCommand() *cobra.Command {
 	cmd.Flags().String("prometheus-url", "", "Prometheus server URL for metrics (e.g., http://prometheus:9090)")
 	cmd.Flags().String("metrics-window", "5m", "Time window for metrics queries (e.g., 5m, 1h, 24h)")
 	cmd.Flags().String("aggregation", "avg", "Aggregation function for metrics (avg, max)")
+	cmd.Flags().String("apply-to-values", "", "Apply recommendations to values.yaml file")
 
 	return cmd
 }
@@ -81,11 +85,12 @@ func runResources(cmd *cobra.Command, args []string) error {
 	flags := cmd.Flags()
 
 	releaseName := args[0]
-	namespace, _ := flags.GetString("namespace")          //nolint: errcheck
-	outputFormat, _ := flags.GetString("output")          //nolint: errcheck
-	prometheusURL, _ := flags.GetString("prometheus-url") //nolint: errcheck
-	metricsWindow, _ := flags.GetString("metrics-window") //nolint: errcheck
-	aggregation, _ := flags.GetString("aggregation")      //nolint: errcheck
+	namespace, _ := flags.GetString("namespace")           //nolint: errcheck
+	outputFormat, _ := flags.GetString("output")           //nolint: errcheck
+	prometheusURL, _ := flags.GetString("prometheus-url")  //nolint: errcheck
+	metricsWindow, _ := flags.GetString("metrics-window")  //nolint: errcheck
+	aggregation, _ := flags.GetString("aggregation")       //nolint: errcheck
+	applyToValues, _ := flags.GetString("apply-to-values") //nolint: errcheck
 
 	settings := cli.New()
 	if namespace != "" {
@@ -130,23 +135,53 @@ func runResources(cmd *cobra.Command, args []string) error {
 		prometheusClient = v1prometheus.NewAPI(promClient)
 	}
 
-	resources, err := extractResourcesFromManifest(ctx, release.Manifest, clientset, prometheusClient, settings.Namespace(), metricsWindow, aggregation)
+	resources, err := extractResourcesFromManifest(ctx, releaseName, release.Manifest, clientset, prometheusClient, settings.Namespace(), metricsWindow, aggregation)
 	if err != nil {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
 
+	recommendations := recommend.AnalyzeRecommendations(resources)
+	if applyToValues != "" && len(recommendations) > 0 {
+		if err := applyRecommendationsToValuesFile(recommendations, applyToValues); err != nil {
+			return fmt.Errorf("failed to apply recommendations to values file: %w", err)
+		}
+
+		fmt.Printf("Recommendations applied to %s\n", applyToValues)
+
+		return nil
+	}
+
+	errs := []error{}
+
 	switch outputFormat {
 	case "json":
-		return outputJSON(resources)
+		if err = outputJSON(resources); err != nil {
+			errs = append(errs, err)
+		}
 	case "yaml":
-		return outputYAML(resources)
+		if err = outputYAML(resources); err != nil {
+			errs = append(errs, err)
+		}
 	default:
-		return outputTable(resources)
+		if err = outputTable(resources); err != nil {
+			errs = append(errs, err)
+		}
+
+		if err = outputTableRecommendations(recommendations); err != nil {
+			errs = append(errs, err)
+		}
 	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("encountered errors: %v", errs)
+	}
+
+	return nil
 }
 
 func extractResourcesFromManifest(
 	ctx context.Context,
+	release string,
 	manifest string,
 	clientset *kubernetes.Clientset,
 	prometheusClient v1prometheus.API,
@@ -228,6 +263,7 @@ func extractResourcesFromManifest(
 
 		for _, container := range containers {
 			resInfo := resources.ResourceInfo{
+				Release:   release,
 				Kind:      kind,
 				Name:      workloadName,
 				Replicas:  replicas,
@@ -264,4 +300,37 @@ func extractResourcesFromManifest(
 	}
 
 	return res, nil
+}
+
+func applyRecommendationsToValuesFile(recommendations []resources.ResourceRecommendation, valuesFilePath string) error {
+	if len(recommendations) == 0 {
+		return nil
+	}
+
+	valuesData, err := os.ReadFile(valuesFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read values file: %w", err)
+	}
+
+	originalText := string(valuesData)
+	updatedText := originalText
+
+	for _, r := range recommendations {
+		newText, err := patch.ApplyPatchesToYaml(updatedText, r)
+		if err != nil {
+			fmt.Printf("Warning: failed to apply recommendation for %s/%s: %v\n", r.Kind, r.Name, err)
+
+			continue
+		}
+
+		updatedText = newText
+	}
+
+	if updatedText != originalText {
+		if err := os.WriteFile(valuesFilePath, []byte(updatedText), 0o644); err != nil {
+			return fmt.Errorf("failed to write updated values file: %w", err)
+		}
+	}
+
+	return nil
 }

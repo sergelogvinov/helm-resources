@@ -38,7 +38,58 @@ helm resources my-release --prometheus-url http://prometheus:9090 --aggregation 
 
 # Use custom time window with average metrics
 helm resources my-release --prometheus-url http://prometheus:9090 --aggregation avg --metrics-window 1h
+
+# Apply resource recommendations to values file
+helm resources my-release --prometheus-url http://prometheus:9090 --apply-to-values values.yaml
 ```
+
+### Apply Resource Recommendations
+
+The plugin can automatically apply resource recommendations to your Helm values file:
+
+```bash
+# Apply recommendations to a values file
+helm resources my-release --prometheus-url http://prometheus:9090 --apply-to-values values.yaml
+
+# Apply with specific metrics window and aggregation
+helm resources my-release --prometheus-url http://prometheus:9090 --aggregation max --metrics-window 1h --apply-to-values values.yaml
+```
+
+This feature will:
+- Analyze current resource usage from Prometheus metrics
+- Calculate optimal resource requests and limits with safety margins
+- Update the specified values file with the new recommendations
+- Preserve existing YAML structure and comments
+- Add missing `resources` sections where needed
+
+**Example values.yaml update:**
+
+Before:
+```yaml
+services:
+  web-server:
+    containers:
+    - name: nginx
+      image: nginx:latest
+```
+
+After applying recommendations:
+```yaml
+services:
+  web-server:
+    containers:
+    - name: nginx
+      image: nginx:latest
+      resources:
+        limits:
+          cpu: 127m
+          memory: 142Mi
+        requests:
+          cpu: 102m
+          memory: 114Mi
+```
+
+ATTAENTION: Currently, this feature works with helm charts [backend-common](https://github.com/sergelogvinov/helm-charts/tree/main/charts/backend-common)
 
 ### Output Formats
 
