@@ -31,3 +31,19 @@ archives:
       - README.md
       - plugin.yaml
       - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  - artifacts: checksum
+    certificate: "${artifact}.pem"
+    cmd: cosign
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    output: true
