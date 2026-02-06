@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/sergelogvinov/helm-resources/compare/v0.1.1...v0.2.0) (2026-02-06)
+
+
+### Features
+
+* patch helm values ([57afb65](https://github.com/sergelogvinov/helm-resources/commit/57afb659cfa90180353bb0b3934410d7515457ac))
+
+
+### Bug Fixes
+
+* error handling ([744657e](https://github.com/sergelogvinov/helm-resources/commit/744657eecf1e8a56d0576ebbd87d265e610d3ce5))
+
 ## [0.1.1](https://github.com/sergelogvinov/helm-resources/compare/v0.1.0...v0.1.1) (2026-02-02)
 
 

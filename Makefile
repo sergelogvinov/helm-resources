@@ -76,6 +76,10 @@ conformance: ## Conformance
 
 ############
 
+.PHONY: docs
+docs:
+	yq -i '.version = "$(TAG)"' plugin.yaml
+
 install: build
 	mkdir -p $(HELM_HOME)/plugins/helm-resources/bin
 	cp bin/helm-resources-$(ARCH) $(HELM_HOME)/plugins/helm-resources/bin/resources
