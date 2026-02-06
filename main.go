@@ -18,7 +18,6 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"os"
 
 	"github.com/sergelogvinov/helm-resources/cmd"
@@ -31,12 +30,6 @@ import (
 
 func main() {
 	if err := cmd.Run(); err != nil {
-		var cmdErr cmd.Error
-		switch {
-		case errors.As(err, &cmdErr):
-			os.Exit(cmdErr.Code)
-		default:
-			os.Exit(1)
-		}
+		os.Exit(1)
 	}
 }

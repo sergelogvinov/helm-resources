@@ -18,6 +18,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -34,11 +37,13 @@ func Run() error {
 	resourcesCommand := newResourcesCommand()
 
 	cmd := cobra.Command{
-		Use:   "helm resources",
-		Short: "Show deployment resources",
-		Long:  rootCmdLongUsage,
-		Args:  resourcesCommand.Args,
-		RunE:  resourcesCommand.RunE,
+		Use:           "helm resources",
+		Short:         "Show deployment resources",
+		Long:          rootCmdLongUsage,
+		Args:          resourcesCommand.Args,
+		RunE:          resourcesCommand.RunE,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
 	cmd.Flags().AddFlagSet(resourcesCommand.Flags())
@@ -46,5 +51,14 @@ func Run() error {
 
 	cmd.SetHelpCommand(&cobra.Command{}) // Disable the help command
 
-	return cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err != nil {
+		errorString := err.Error()
+		if strings.Contains(errorString, "arg(s)") {
+			fmt.Fprintf(os.Stderr, "Error: %s\n\n", errorString)
+			fmt.Fprintln(os.Stderr, cmd.UsageString())
+		}
+	}
+
+	return err
 }
