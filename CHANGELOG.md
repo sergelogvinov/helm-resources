@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/sergelogvinov/helm-resources/compare/v0.2.0...v0.2.1) (2026-02-06)
+
+
+### Bug Fixes
+
+* gorelease ([3b5c51a](https://github.com/sergelogvinov/helm-resources/commit/3b5c51a1fb4dbdd48b3f648ce191a5e7bc5f5fde))
+
 ## [0.2.0](https://github.com/sergelogvinov/helm-resources/compare/v0.1.1...v0.2.0) (2026-02-06)
 
 
