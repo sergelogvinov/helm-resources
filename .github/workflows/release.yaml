@@ -8,6 +8,7 @@ on:
 
 jobs:
   goreleaser:
+    name: GoReleaser
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -20,6 +21,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+      - name: Set up Cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
