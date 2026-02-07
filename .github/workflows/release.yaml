@@ -12,16 +12,20 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
       - name: Set up Go
+        timeout-minutes: 2
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
       - name: Set up Cosign
+        timeout-minutes: 1
         uses: sigstore/cosign-installer@v3
 
       - name: Run GoReleaser
