@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/sergelogvinov/helm-resources/compare/v0.2.1...v0.3.0) (2026-02-09)
+
+
+### Features
+
+* vpa metrics ([2849c47](https://github.com/sergelogvinov/helm-resources/commit/2849c47bba88b8fe350e721f488ab7fef47d42f8))
+
+
+### Bug Fixes
+
+* cosign permissions ([c31fb8d](https://github.com/sergelogvinov/helm-resources/commit/c31fb8d07f52f666aab5ce649ed82b01e95272f2))
+
 ## [0.2.1](https://github.com/sergelogvinov/helm-resources/compare/v0.2.0...v0.2.1) (2026-02-06)
 
 
