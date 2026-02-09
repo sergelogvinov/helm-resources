@@ -58,6 +58,8 @@ func extractResourcesFromCRD(
 		return extractCNPGClusterResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
 	case "postgresql.cnpg.io/v1/Pooler":
 		return extractCNPGPoolerResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
+	case "clickhouse.altinity.com/v1/ClickHouseInstallation":
+		return extractClickHouseInstallationResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
 	}
 
 	return res, nil
@@ -77,7 +79,7 @@ func extractCNPGClusterResources(
 ) ([]resources.ResourceInfo, error) {
 	clusterName := obj.GetName()
 
-	replicas := "unknown"
+	replicas := unknown
 	if instances, ok, err := unstructured.NestedInt64(obj.Object, "spec", "instances"); err == nil && ok {
 		replicas = fmt.Sprintf("%d", instances)
 	}
@@ -120,7 +122,7 @@ func extractCNPGPoolerResources(
 ) ([]resources.ResourceInfo, error) {
 	poolerName := obj.GetName()
 
-	replicas := "unknown"
+	replicas := unknown
 	if instances, ok, err := unstructured.NestedInt64(obj.Object, "spec", "instances"); err == nil && ok {
 		replicas = fmt.Sprintf("%d", instances)
 	}
@@ -151,6 +153,88 @@ func extractCNPGPoolerResources(
 	}
 
 	cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, resInfo.Kind, poolerName, resInfo.Container, metricsWindow, aggregation)
+	resInfo.CPUUsage = cpuUsage
+	resInfo.MemUsage = memUsage
+
+	return []resources.ResourceInfo{resInfo}, nil
+}
+
+// extractClickHouseInstallationResources extracts resource information from a ClickHouseInstallation resource
+//
+//nolint:gocyclo,cyclop
+func extractClickHouseInstallationResources(
+	ctx context.Context,
+	_ *kubernetes.Clientset,
+	vpaClient vpa.Interface,
+	prometheusClient v1prometheus.API,
+	release string,
+	obj unstructured.Unstructured,
+	namespace,
+	metricsWindow,
+	aggregation string,
+) ([]resources.ResourceInfo, error) {
+	installationName := obj.GetName()
+	clusterName := installationName
+
+	replicas := unknown
+	totalReplicas := int64(0)
+
+	clusters, found, err := unstructured.NestedSlice(obj.Object, "spec", "configuration", "clusters")
+	if err == nil && found {
+		for _, cluster := range clusters {
+			if clusterMap, ok := cluster.(map[string]any); ok {
+				shardsCount, ok, err := unstructured.NestedInt64(clusterMap, "layout", "shardsCount")
+				if err == nil && ok {
+					replicasCount, ok, err := unstructured.NestedInt64(clusterMap, "layout", "replicasCount")
+					if err == nil && ok {
+						totalReplicas += shardsCount * replicasCount
+
+						continue
+					}
+				}
+
+				name, ok, err := unstructured.NestedString(clusterMap, "name")
+				if err == nil && ok {
+					clusterName = name
+				}
+			}
+		}
+	}
+
+	if totalReplicas > 0 {
+		replicas = fmt.Sprintf("%d", totalReplicas)
+	}
+
+	resInfo := resources.ResourceInfo{
+		Release:   release,
+		Kind:      "ClickHouseInstallation",
+		Name:      installationName,
+		Replicas:  replicas,
+		Container: "clickhouse",
+	}
+
+	podTemplates, found, err := unstructured.NestedSlice(obj.Object, "spec", "templates", "podTemplates")
+	if err == nil && found && len(podTemplates) > 0 {
+		if podTemplate, ok := podTemplates[0].(map[string]any); ok {
+			containers, found, err := unstructured.NestedSlice(podTemplate, "spec", "containers")
+			if err == nil && found {
+				for _, container := range containers {
+					if containerMap, ok := container.(map[string]any); ok {
+						if containerName, found, _ := unstructured.NestedString(containerMap, "name"); found && containerName == "clickhouse" { //nolint:errcheck
+							resourcesSpec, ok, err := unstructured.NestedMap(containerMap, "resources")
+							if err == nil && ok {
+								extractContainerResources(resourcesSpec, &resInfo)
+							}
+
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, resInfo.Kind, "chi-"+installationName+"-"+clusterName, resInfo.Container, metricsWindow, aggregation)
 	resInfo.CPUUsage = cpuUsage
 	resInfo.MemUsage = memUsage
 
