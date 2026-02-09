@@ -24,13 +24,18 @@ import (
 
 	v1prometheus "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 )
 
 // GetContainerMetrics retrieves CPU and memory usage for a container using either Prometheus or Kubernetes Metrics API
 func GetContainerMetrics(
 	ctx context.Context,
+	vpaClient vpa.Interface,
 	prometheusClient v1prometheus.API,
 	namespace,
+	kind,
 	workloadName,
 	containerName,
 	metricsWindow,
@@ -38,6 +43,10 @@ func GetContainerMetrics(
 ) (int64, int64) {
 	if prometheusClient != nil {
 		return GetPrometheusMetrics(ctx, prometheusClient, namespace, workloadName, containerName, metricsWindow, aggregation)
+	}
+
+	if vpaClient != nil {
+		return GetVPAMetrics(ctx, vpaClient, namespace, kind, workloadName, containerName)
 	}
 
 	return 0, 0
@@ -74,4 +83,38 @@ func GetPrometheusMetrics(ctx context.Context, prometheusClient v1prometheus.API
 	}
 
 	return cpuUsage, memUsage
+}
+
+// GetVPAMetrics retrieves CPU and memory recommendations from VPA
+func GetVPAMetrics(ctx context.Context, vpaClient vpa.Interface, namespace, kind, workloadName, containerName string) (int64, int64) {
+	vpaList, err := vpaClient.AutoscalingV1().VerticalPodAutoscalers(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, 0
+	}
+
+	for _, vpaItem := range vpaList.Items {
+		if vpaItem.Spec.TargetRef != nil && vpaItem.Spec.TargetRef.Name == workloadName && vpaItem.Spec.TargetRef.Kind == kind {
+			if vpaItem.Status.Recommendation != nil {
+				for _, containerRec := range vpaItem.Status.Recommendation.ContainerRecommendations {
+					if containerRec.ContainerName == containerName {
+						var cpuUsage, memUsage int64
+
+						if containerRec.Target != nil {
+							if cpu, ok := containerRec.Target["cpu"]; ok {
+								cpuUsage = cpu.MilliValue()
+							}
+
+							if mem, ok := containerRec.Target["memory"]; ok {
+								memUsage = mem.Value()
+							}
+						}
+
+						return cpuUsage, memUsage
+					}
+				}
+			}
+		}
+	}
+
+	return 0, 0
 }

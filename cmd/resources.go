@@ -39,6 +39,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/yaml"
@@ -119,7 +120,10 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	var prometheusClient v1prometheus.API
+	var (
+		prometheusClient v1prometheus.API
+		vpaClient        vpa.Interface
+	)
 
 	if prometheusURL != "" {
 		promClient, err := api.NewClient(api.Config{
@@ -135,7 +139,12 @@ func runResources(cmd *cobra.Command, args []string) error {
 		prometheusClient = v1prometheus.NewAPI(promClient)
 	}
 
-	resources, err := extractResourcesFromManifest(ctx, releaseName, release.Manifest, clientset, prometheusClient, settings.Namespace(), metricsWindow, aggregation)
+	vpaClientset, err := vpa.NewForConfig(config)
+	if err == nil {
+		vpaClient = vpaClientset
+	}
+
+	resources, err := extractResourcesFromManifest(ctx, clientset, vpaClient, prometheusClient, releaseName, release.Manifest, settings.Namespace(), metricsWindow, aggregation)
 	if err != nil {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
@@ -181,10 +190,11 @@ func runResources(cmd *cobra.Command, args []string) error {
 
 func extractResourcesFromManifest(
 	ctx context.Context,
+	clientset *kubernetes.Clientset,
+	vpaClient vpa.Interface,
+	prometheusClient v1prometheus.API,
 	release string,
 	manifest string,
-	clientset *kubernetes.Clientset,
-	prometheusClient v1prometheus.API,
 	namespace,
 	metricsWindow,
 	aggregation string,
@@ -290,7 +300,7 @@ func extractResourcesFromManifest(
 				}
 			}
 
-			cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, prometheusClient, namespace, workloadName, container.Name, metricsWindow, aggregation)
+			cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, kind, workloadName, container.Name, metricsWindow, aggregation)
 
 			resInfo.CPUUsage = cpuUsage
 			resInfo.MemUsage = memUsage
