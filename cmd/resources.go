@@ -36,6 +36,7 @@ import (
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,7 +51,7 @@ const (
 Show resource requests and limits for all workloads in a helm release.
 
 This command analyzes a deployed helm release and displays the CPU and memory
-requests and limits for all deployments, statefulsets, and daemonsets managed by the release.
+requests and limits for all deployments, statefulsets, daemonsets, and cronjobs managed by the release.
 `
 
 	unknown = "unknown"
@@ -213,7 +214,11 @@ func extractResourcesFromManifest(
 		}
 
 		kind := obj.GetKind()
-		if (kind != "Deployment" && kind != "StatefulSet" && kind != "DaemonSet") || obj.GetAPIVersion() != "apps/v1" {
+		apiVersion := obj.GetAPIVersion()
+
+		standardWorkload := ((kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet") && apiVersion == "apps/v1") ||
+			(kind == "CronJob" && apiVersion == "batch/v1")
+		if !standardWorkload {
 			continue
 		}
 
@@ -268,6 +273,21 @@ func extractResourcesFromManifest(
 				replicas = unknown
 			} else {
 				replicas = fmt.Sprintf("%d", dsObj.Status.NumberReady)
+			}
+		case "CronJob":
+			var cronJob batchv1.CronJob
+			if err := yaml.Unmarshal([]byte(doc), &cronJob); err != nil {
+				continue
+			}
+
+			containers = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers
+			workloadName = cronJob.Name
+
+			cronJobObj, err := clientset.BatchV1().CronJobs(namespace).Get(ctx, cronJob.Name, metav1.GetOptions{})
+			if err != nil {
+				replicas = unknown
+			} else {
+				replicas = fmt.Sprintf("%d", len(cronJobObj.Status.Active))
 			}
 		}
 
