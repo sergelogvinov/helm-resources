@@ -1,5 +1,5 @@
 name: resources
-version: "0.2.1"
+version: "0.4.0"
 usage: Show deployment resources for helm releases
 description: Display resource requests and limits for all deployments in a helm release
 useTunnel: true

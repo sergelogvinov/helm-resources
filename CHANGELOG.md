@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/sergelogvinov/helm-resources/compare/v0.3.0...v0.4.0) (2026-02-09)
+
+
+### Features
+
+* support altinity resources ([9503ace](https://github.com/sergelogvinov/helm-resources/commit/9503ace9dd44c0a5fa1f7187aab035fa092642ec))
+* support cnpg resources ([bfaa569](https://github.com/sergelogvinov/helm-resources/commit/bfaa56999d9f762089666c39d7113d1d5b72e8f1))
+* support cronjobs ([4257b59](https://github.com/sergelogvinov/helm-resources/commit/4257b596ec4689474f62e1b362d8819fba1fe3ac))
+
 ## [0.3.0](https://github.com/sergelogvinov/helm-resources/compare/v0.2.1...v0.3.0) (2026-02-09)
 
 
