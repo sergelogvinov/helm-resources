@@ -219,6 +219,13 @@ func extractResourcesFromManifest(
 		standardWorkload := ((kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet") && apiVersion == "apps/v1") ||
 			(kind == "CronJob" && apiVersion == "batch/v1")
 		if !standardWorkload {
+			resCRD, err := extractResourcesFromCRD(ctx, clientset, vpaClient, prometheusClient, release, doc, namespace, metricsWindow, aggregation)
+			if err != nil {
+				continue
+			}
+
+			res = append(res, resCRD...)
+
 			continue
 		}
 
