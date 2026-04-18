@@ -25,6 +25,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version of the helm-resources CLI application.
+var Version = "HEAD"
+
 const rootCmdLongUsage = `
 The Helm Resources Plugin
 `
@@ -54,8 +57,9 @@ func Run() error {
 	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		errorString := err.Error()
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", errorString)
+
 		if strings.Contains(errorString, "arg(s)") {
-			fmt.Fprintf(os.Stderr, "Error: %s\n\n", errorString)
 			fmt.Fprintln(os.Stderr, cmd.UsageString())
 		}
 	}

@@ -22,9 +22,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version of the helm-resources CLI application.
-var Version = "HEAD"
-
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
