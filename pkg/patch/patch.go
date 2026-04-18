@@ -287,7 +287,7 @@ func addMissingResourceStructure(
 	newValue string,
 ) []string {
 	var (
-		insertLines []string
+		insertLines []string //nolint:prealloc
 		insertPos   int
 	)
 
