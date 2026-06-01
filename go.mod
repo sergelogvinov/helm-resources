@@ -7,7 +7,7 @@ require (
 	github.com/prometheus/common v0.67.5
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	helm.sh/helm/v3 v3.20.2
+	helm.sh/helm/v3 v3.21.0
 	k8s.io/api v0.35.4
 	k8s.io/apimachinery v0.35.4
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.6.0
