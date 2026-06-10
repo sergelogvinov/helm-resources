@@ -29,9 +29,25 @@ import (
 
 const none = "<none>"
 
-func outputTable(resources []resources.ResourceInfo) error {
-	fmt.Printf("\nRESOURCES:\n\n")
+func outputJSON(resources []resources.ResourceInfo) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
 
+	return encoder.Encode(resources)
+}
+
+func outputYAML(resources []resources.ResourceInfo) error {
+	yamlData, err := yaml.Marshal(resources)
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(string(yamlData))
+
+	return nil
+}
+
+func outputTable(resources []resources.ResourceInfo) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "KIND\tNAME\tREPLICAS\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
 
@@ -53,30 +69,12 @@ func outputTable(resources []resources.ResourceInfo) error {
 	return w.Flush()
 }
 
-func outputJSON(resources []resources.ResourceInfo) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-
-	return encoder.Encode(resources)
-}
-
-func outputYAML(resources []resources.ResourceInfo) error {
-	yamlData, err := yaml.Marshal(resources)
-	if err != nil {
-		return err
-	}
-
-	fmt.Print(string(yamlData))
-
-	return nil
-}
-
 func outputTableRecommendations(recommendations []resources.ResourceRecommendation) error {
 	if len(recommendations) > 0 {
 		fmt.Printf("\nRESOURCE RECOMMENDATIONS:\n\n")
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/Memory)\tLIMITS (CPU/Memory)\tCURRENT (CPU/Memory)\n")
+		fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
 
 		for _, rec := range recommendations {
 			requestsInfo := formatResourceValues(rec.RecommendedCPURequest, rec.RecommendedMemRequest)
