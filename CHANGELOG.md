@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/sergelogvinov/helm-resources/compare/v0.4.1...v0.4.2) (2026-06-10)
+
+
+### Bug Fixes
+
+* deps ([e880366](https://github.com/sergelogvinov/helm-resources/commit/e880366e4d7a12b5d35f4ad9e726a980d2b0ff5d))
+
 ## [0.4.1](https://github.com/sergelogvinov/helm-resources/compare/v0.4.0...v0.4.1) (2026-06-10)
 
 
