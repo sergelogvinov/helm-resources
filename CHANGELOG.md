@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/sergelogvinov/helm-resources/compare/v0.4.0...v0.4.1) (2026-06-10)
+
+
+### Bug Fixes
+
+* output headers ([7216d7f](https://github.com/sergelogvinov/helm-resources/commit/7216d7fada8d9217378a3be0c0ab13e9c889f5b6))
+
 ## [0.4.0](https://github.com/sergelogvinov/helm-resources/compare/v0.3.0...v0.4.0) (2026-02-09)
 
 
