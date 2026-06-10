@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/sergelogvinov/helm-resources/compare/v0.4.2...v0.4.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* goreleaser cosign signing ([7b613e3](https://github.com/sergelogvinov/helm-resources/commit/7b613e382d388267950bdc41b51aedaa171a374f))
+
 ## [0.4.2](https://github.com/sergelogvinov/helm-resources/compare/v0.4.1...v0.4.2) (2026-06-10)
 
 
