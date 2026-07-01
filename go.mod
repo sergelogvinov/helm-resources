@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/common v0.68.1
+	github.com/prometheus/common v0.69.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	helm.sh/helm/v3 v3.21.0
