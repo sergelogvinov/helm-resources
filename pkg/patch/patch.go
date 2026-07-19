@@ -17,6 +17,7 @@ limitations under the License.
 package patch
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,6 +25,9 @@ import (
 
 	"sigs.k8s.io/yaml"
 )
+
+// ErrNotFound is returned when a resource is not found.
+var ErrNotFound = errors.New("not found")
 
 // WorkloadPath represents a path to a workload in the YAML structure
 type WorkloadPath struct {
@@ -44,7 +48,7 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 
 	workloadPaths := findWorkloadPaths(values, workloadName)
 	if len(workloadPaths) == 0 {
-		return yamlText, fmt.Errorf("workload %s not found", workloadName)
+		return yamlText, ErrNotFound
 	}
 
 	for _, path := range workloadPaths {

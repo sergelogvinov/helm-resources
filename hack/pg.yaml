@@ -1,0 +1,42 @@
+fullnameOverride: pg-backend
+replicaCount: 1
+
+podlabels:
+  project: db
+  severity: critical
+
+postgresqlConfigurationExtra:
+  max_worker_processes: 10
+  max_parallel_workers: 10
+
+postgresqlServerMemory: 2048
+postgresqlMaxConnections: 250
+
+autoscaling:
+  enabled: true
+resources:
+  limits:
+    memory: 10Gi
+    cpu: 2
+  requests:
+    memory: 4Gi
+    cpu: 100m
+
+persistence:
+  enabled: true
+  size: 32Gi
+
+backup:
+  enabled: true
+
+backupCheck:
+  enabled: true
+
+  persistence:
+    size: 32Gi
+
+metrics:
+  enabled: true
+
+nodeSelector:
+  node-role.kubernetes.io/db: ""

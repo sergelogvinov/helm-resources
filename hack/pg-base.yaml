@@ -1,0 +1,23 @@
+autoscaling:
+  enabled: true
+resources:
+  limits:
+    memory: 10Gi
+    cpu: 2
+  requests:
+    memory: 4Gi
+    cpu: 100m
+
+backup:
+  enabled: true
+
+backupCheck:
+  enabled: true
+
+  resources:
+    limits:
+      memory: 4Gi
+      cpu: 200m
+    requests:
+      memory: 4Gi
+      cpu: 100m

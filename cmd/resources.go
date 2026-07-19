@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/api"
 	v1prometheus "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/spf13/cobra"
+	"go.uber.org/multierr"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 
@@ -65,8 +67,8 @@ func newResourcesCommand() *cobra.Command {
 		Example: strings.Join([]string{
 			"  helm resources my-release",
 			"  helm resources my-release --namespace production",
-			"  helm resources my-release -o json",
-			"  helm resources my-release --apply-to-values values.yaml",
+			"  helm resources my-release --output json",
+			"  helm resources my-release --values values.yaml",
 		}, "\n"),
 		Args: cobra.ExactArgs(1),
 		RunE: runResources,
@@ -74,10 +76,10 @@ func newResourcesCommand() *cobra.Command {
 
 	cmd.Flags().StringP("namespace", "n", "", "namespace of the release")
 	cmd.Flags().StringP("output", "o", "table", "output format (table, json, yaml)")
+	cmd.Flags().StringArrayP("values", "f", []string{}, "Apply recommendations to values.yaml file (can be specified multiple times)")
 	cmd.Flags().String("prometheus-url", "", "Prometheus server URL for metrics (e.g., http://prometheus:9090)")
 	cmd.Flags().String("metrics-window", "5m", "Time window for metrics queries (e.g., 5m, 1h, 24h)")
 	cmd.Flags().String("aggregation", "avg", "Aggregation function for metrics (avg, max)")
-	cmd.Flags().String("apply-to-values", "", "Apply recommendations to values.yaml file")
 
 	return cmd
 }
@@ -87,12 +89,12 @@ func runResources(cmd *cobra.Command, args []string) error {
 	flags := cmd.Flags()
 
 	releaseName := args[0]
-	namespace, _ := flags.GetString("namespace")           //nolint: errcheck
-	outputFormat, _ := flags.GetString("output")           //nolint: errcheck
-	prometheusURL, _ := flags.GetString("prometheus-url")  //nolint: errcheck
-	metricsWindow, _ := flags.GetString("metrics-window")  //nolint: errcheck
-	aggregation, _ := flags.GetString("aggregation")       //nolint: errcheck
-	applyToValues, _ := flags.GetString("apply-to-values") //nolint: errcheck
+	namespace, _ := flags.GetString("namespace")          //nolint: errcheck
+	outputFormat, _ := flags.GetString("output")          //nolint: errcheck
+	applyToValues, _ := flags.GetStringArray("values")    //nolint: errcheck
+	prometheusURL, _ := flags.GetString("prometheus-url") //nolint: errcheck
+	metricsWindow, _ := flags.GetString("metrics-window") //nolint: errcheck
+	aggregation, _ := flags.GetString("aggregation")      //nolint: errcheck
 
 	settings := cli.New()
 	if namespace != "" {
@@ -151,12 +153,10 @@ func runResources(cmd *cobra.Command, args []string) error {
 	}
 
 	recommendations := recommend.AnalyzeRecommendations(resources)
-	if applyToValues != "" && len(recommendations) > 0 {
-		if err := applyRecommendationsToValuesFile(recommendations, applyToValues); err != nil {
-			return fmt.Errorf("failed to apply recommendations to values file: %w", err)
+	if len(applyToValues) > 0 && len(recommendations) > 0 {
+		if err := applyRecommendationsToValuesFiles(recommendations, applyToValues); err != nil {
+			return err
 		}
-
-		fmt.Printf("Recommendations applied to %s\n", applyToValues)
 
 		return nil
 	}
@@ -339,35 +339,57 @@ func extractResourcesFromManifest(
 	return res, nil
 }
 
-func applyRecommendationsToValuesFile(recommendations []resources.ResourceRecommendation, valuesFilePath string) error {
+func applyRecommendationsToValuesFiles(recommendations []resources.ResourceRecommendation, valuesFiles []string) error {
 	if len(recommendations) == 0 {
 		return nil
 	}
 
-	valuesData, err := os.ReadFile(valuesFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read values file: %w", err)
-	}
+	var (
+		retryRecommendations []resources.ResourceRecommendation
+		errs                 error
+	)
 
-	originalText := string(valuesData)
-	updatedText := originalText
+	maxRetries := len(valuesFiles)
 
-	for _, r := range recommendations {
-		newText, err := patch.ApplyPatchesToYaml(updatedText, r)
+	for retry, path := range valuesFiles {
+		valuesData, err := os.ReadFile(path)
 		if err != nil {
-			fmt.Printf("Warning: failed to apply recommendation for %s/%s: %v\n", r.Kind, r.Name, err)
-
-			continue
+			return fmt.Errorf("failed to read values file: %w", err)
 		}
 
-		updatedText = newText
-	}
+		originalText := string(valuesData)
+		updatedText := originalText
 
-	if updatedText != originalText {
-		if err := os.WriteFile(valuesFilePath, []byte(updatedText), 0o644); err != nil {
-			return fmt.Errorf("failed to write updated values file: %w", err)
+		retryRecommendations = []resources.ResourceRecommendation{}
+
+		for _, r := range recommendations {
+			newText, err := patch.ApplyPatchesToYaml(updatedText, r)
+			if err != nil {
+				if !errors.Is(err, patch.ErrNotFound) {
+					return err
+				}
+
+				if retry == maxRetries-1 {
+					errs = multierr.Append(errs, fmt.Errorf("failed to apply recommendation for %s/%s: %w", r.Kind, r.Name, err))
+				}
+
+				retryRecommendations = append(retryRecommendations, r)
+			}
+
+			updatedText = newText
+		}
+
+		if updatedText != originalText {
+			if err := os.WriteFile(path, []byte(updatedText), 0o644); err != nil {
+				return fmt.Errorf("failed to write updated values file %s: %w", path, err)
+			}
+		}
+
+		recommendations = retryRecommendations
+		if len(recommendations) == 0 {
+			break
 		}
 	}
 
-	return nil
+	return errs
 }

@@ -7,6 +7,7 @@ require (
 	github.com/prometheus/common v0.68.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	go.uber.org/multierr v1.11.0
 	helm.sh/helm/v3 v3.21.0
 	k8s.io/api v0.36.1
 	k8s.io/apimachinery v0.36.1
