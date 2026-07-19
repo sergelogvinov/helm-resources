@@ -32,7 +32,9 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
+
 componentName:
+  otherField: someValue
   resources:
     limits:
       cpu: 500m
@@ -94,7 +96,7 @@ func TestApplyPatchesToYaml(t *testing.T) {
 		expectErr error
 	}{
 		{
-			name: "common patch",
+			name: "common deploy patch",
 			yaml: commonYAML,
 			resources: resources.ResourceRecommendation{
 				Release:               "common",
@@ -113,7 +115,9 @@ resources:
   limits:
     cpu: 200m
     memory: 512Mi
+
 componentName:
+  otherField: someValue
   resources:
     limits:
       cpu: 500m
