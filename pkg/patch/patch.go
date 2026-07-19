@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/multierr"
+
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
 
 	"sigs.k8s.io/yaml"
@@ -31,7 +33,7 @@ var ErrNotFound = errors.New("not found")
 
 // WorkloadPath represents a path to a workload in the YAML structure
 type WorkloadPath struct {
-	Section   string // services, workers, jobs
+	Section   string // services, workers, jobs, or empty for top-level resources
 	Workload  string // workload name
 	Container string // container name (if applicable)
 }
@@ -45,16 +47,39 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 	}
 
 	workloadName, _ := strings.CutPrefix(res.Name, res.Release+"-")
-
 	workloadPaths := findWorkloadPaths(values, workloadName)
+
+	if len(workloadPaths) == 0 {
+		if res.Release == res.Name && values["resources"] != nil {
+			containerName := res.Container
+			if containerName == res.Name {
+				containerName = ""
+			}
+
+			workloadPaths = []WorkloadPath{
+				{
+					Section:  "",
+					Workload: containerName,
+				},
+			}
+		}
+	}
+
 	if len(workloadPaths) == 0 {
 		return yamlText, ErrNotFound
 	}
 
 	for _, path := range workloadPaths {
-		if newText, err := applyResourcePatchesToPath(yamlText, path, res); err == nil {
-			yamlText = newText
+		if path.Container != "" && res.Container != path.Container {
+			continue
 		}
+
+		newText, err := applyResourcePatchesToPath(yamlText, path, res)
+		if err != nil {
+			return "", fmt.Errorf("failed to apply resource patches to path %w", err)
+		}
+
+		yamlText = newText
 	}
 
 	if !strings.HasSuffix(yamlText, "\n") {
@@ -99,31 +124,45 @@ func findWorkloadPaths(values map[string]any, workloadName string) []WorkloadPat
 }
 
 func applyResourcePatchesToPath(yamlText string, path WorkloadPath, rec resources.ResourceRecommendation) (string, error) {
+	var errs error
+
 	if rec.RecommendedCPULimit > 0 {
-		if newText, err := applyValuePatch(yamlText, path, "limits", "cpu", formatCPUForYaml(rec.RecommendedCPULimit)); err == nil {
+		newText, err := applyValuePatch(yamlText, path, "limits", "cpu", formatCPUForYaml(rec.RecommendedCPULimit))
+		if err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
 			yamlText = newText
 		}
 	}
 
 	if rec.RecommendedMemLimit > 0 {
-		if newText, err := applyValuePatch(yamlText, path, "limits", "memory", formatMemoryForYaml(rec.RecommendedMemLimit)); err == nil {
+		newText, err := applyValuePatch(yamlText, path, "limits", "memory", formatMemoryForYaml(rec.RecommendedMemLimit))
+		if err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
 			yamlText = newText
 		}
 	}
 
 	if rec.RecommendedCPURequest > 0 {
-		if newText, err := applyValuePatch(yamlText, path, "requests", "cpu", formatCPUForYaml(rec.RecommendedCPURequest)); err == nil {
+		newText, err := applyValuePatch(yamlText, path, "requests", "cpu", formatCPUForYaml(rec.RecommendedCPURequest))
+		if err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
 			yamlText = newText
 		}
 	}
 
 	if rec.RecommendedMemRequest > 0 {
-		if newText, err := applyValuePatch(yamlText, path, "requests", "memory", formatMemoryForYaml(rec.RecommendedMemRequest)); err == nil {
+		newText, err := applyValuePatch(yamlText, path, "requests", "memory", formatMemoryForYaml(rec.RecommendedMemRequest))
+		if err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
 			yamlText = newText
 		}
 	}
 
-	return yamlText, nil
+	return yamlText, errs
 }
 
 func applyValuePatch(yamlText string, path WorkloadPath, resourceType, resource, newValue string) (string, error) {
@@ -150,11 +189,21 @@ func applyValuePatch(yamlText string, path WorkloadPath, resourceType, resource,
 }
 
 func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
-	sectionFound := false
-	workloadFound := false
+	sectionFound := path.Section == ""
+	workloadFound := path.Workload == ""
 	containerFound := path.Container == ""
 	inContainers := false
 	containerIndex := -1
+
+	// The case when resources are defined at the top level (no section, no workload, no container)
+	if sectionFound && workloadFound && containerFound {
+		i, indent := findResourcesSection(lines, 0, 0)
+		if i > 0 {
+			return i - 1, indent, nil
+		}
+
+		return -1, 0, fmt.Errorf("target location not found")
+	}
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -209,7 +258,7 @@ func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
 		}
 	}
 
-	return -1, 0, fmt.Errorf("target location not found: %s.%s.%s", path.Section, path.Workload, path.Container)
+	return -1, 0, fmt.Errorf("target location not found: %s/%s/%s", path.Section, path.Workload, path.Container)
 }
 
 func findResourcesSection(lines []string, startLine, baseIndent int) (int, int) {
@@ -222,7 +271,7 @@ func findResourcesSection(lines []string, startLine, baseIndent int) (int, int) 
 		trimmed := strings.TrimSpace(line)
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 
-		if trimmed != "" && indent <= baseIndent {
+		if trimmed != "" && baseIndent > 0 && indent <= baseIndent {
 			break
 		}
 
