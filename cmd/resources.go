@@ -31,6 +31,7 @@ import (
 	"go.uber.org/multierr"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/release"
 
 	"github.com/sergelogvinov/helm-resources/pkg/metrics"
 	"github.com/sergelogvinov/helm-resources/pkg/patch"
@@ -147,7 +148,7 @@ func runResources(cmd *cobra.Command, args []string) error {
 		vpaClient = vpaClientset
 	}
 
-	resources, err := extractResourcesFromManifest(ctx, clientset, vpaClient, prometheusClient, releaseName, release.Manifest, settings.Namespace(), metricsWindow, aggregation)
+	resources, err := extractResourcesFromHelmRelease(ctx, clientset, vpaClient, prometheusClient, release, metricsWindow, aggregation)
 	if err != nil {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
@@ -189,20 +190,26 @@ func runResources(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func extractResourcesFromManifest(
+// nolint: cyclop,gocyclo
+func extractResourcesFromHelmRelease(
 	ctx context.Context,
 	clientset *kubernetes.Clientset,
 	vpaClient vpa.Interface,
 	prometheusClient v1prometheus.API,
-	release string,
-	manifest string,
-	namespace,
-	metricsWindow,
+	release *release.Release,
+	metricsWindow string,
 	aggregation string,
 ) ([]resources.ResourceInfo, error) {
 	var res []resources.ResourceInfo
 
-	for doc := range strings.SplitSeq(manifest, "---") {
+	namespace := release.Namespace
+	chartName := ""
+
+	if release.Chart != nil && release.Chart.Metadata != nil {
+		chartName = release.Chart.Metadata.Name
+	}
+
+	for doc := range strings.SplitSeq(release.Manifest, "---") {
 		doc = strings.TrimSpace(doc)
 		if doc == "" {
 			continue
@@ -219,7 +226,7 @@ func extractResourcesFromManifest(
 		standardWorkload := ((kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet") && apiVersion == "apps/v1") ||
 			(kind == "CronJob" && apiVersion == "batch/v1")
 		if !standardWorkload {
-			resCRD, err := extractResourcesFromCRD(ctx, clientset, vpaClient, prometheusClient, release, doc, namespace, metricsWindow, aggregation)
+			resCRD, err := extractResourcesFromCRD(ctx, clientset, vpaClient, prometheusClient, release.Name, doc, namespace, metricsWindow, aggregation)
 			if err != nil {
 				continue
 			}
@@ -300,7 +307,8 @@ func extractResourcesFromManifest(
 
 		for _, container := range containers {
 			resInfo := resources.ResourceInfo{
-				Release:   release,
+				Chart:     chartName,
+				Release:   release.Name,
 				Kind:      kind,
 				Name:      workloadName,
 				Replicas:  replicas,
