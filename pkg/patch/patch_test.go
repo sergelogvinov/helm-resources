@@ -26,6 +26,22 @@ import (
 )
 
 const (
+	commonYAML = `
+someOtherField: someValue
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+componentName:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 768Mi
+`
+
 	simpleServiceYAML = `
 someOtherField: someValue
 services:
@@ -77,6 +93,36 @@ func TestApplyPatchesToYaml(t *testing.T) {
 		expect    string
 		expectErr error
 	}{
+		{
+			name: "common patch",
+			yaml: commonYAML,
+			resources: resources.ResourceRecommendation{
+				Release:               "common",
+				Name:                  "common",
+				RecommendedCPURequest: 100,
+				RecommendedMemRequest: 256 * 1024 * 1024,
+				RecommendedCPULimit:   200,
+				RecommendedMemLimit:   512 * 1024 * 1024,
+			},
+			expect: `
+someOtherField: someValue
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
+componentName:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 768Mi
+`,
+		},
 		{
 			name: "service not found",
 			yaml: simpleServiceYAML,
