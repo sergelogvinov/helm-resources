@@ -209,27 +209,23 @@ func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
 		trimmed := strings.TrimSpace(line)
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 
-		if !sectionFound && trimmed == path.Section+":" {
-			sectionFound = true
-
-			continue
-		}
-
 		if !sectionFound {
-			continue
-		}
-
-		if !workloadFound && strings.HasPrefix(trimmed, path.Workload+":") {
-			workloadFound = true
-
-			if path.Container == "" {
-				return i, indent, nil
+			if trimmed == path.Section+":" {
+				sectionFound = true
 			}
 
 			continue
 		}
 
 		if !workloadFound {
+			if strings.HasPrefix(trimmed, path.Workload+":") {
+				workloadFound = true
+
+				if path.Container == "" {
+					return i, indent, nil
+				}
+			}
+
 			continue
 		}
 
@@ -378,6 +374,10 @@ func findInsertPosition(lines []string, startLine, baseIndent int) int {
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 
 		if trimmed != "" && indent <= baseIndent {
+			if strings.TrimSpace(lines[i-1]) == "" {
+				return i - 1
+			}
+
 			return i
 		}
 	}
