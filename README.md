@@ -40,7 +40,7 @@ helm resources my-release --prometheus-url http://prometheus:9090 --aggregation 
 helm resources my-release --prometheus-url http://prometheus:9090 --aggregation avg --metrics-window 1h
 
 # Apply resource recommendations to values file
-helm resources my-release --prometheus-url http://prometheus:9090 --apply-to-values values.yaml
+helm resources my-release --prometheus-url http://prometheus:9090 --values values.yaml
 ```
 
 ### Apply Resource Recommendations
@@ -48,11 +48,11 @@ helm resources my-release --prometheus-url http://prometheus:9090 --apply-to-val
 The plugin can automatically apply resource recommendations to your Helm values file:
 
 ```bash
-# Apply recommendations to a values file
-helm resources my-release --prometheus-url http://prometheus:9090 --apply-to-values values.yaml
+# Apply recommendations across multiple values files
+helm resources my-release --prometheus-url http://prometheus:9090 --values overrides.yaml --values base.yaml
 
 # Apply with specific metrics window and aggregation
-helm resources my-release --prometheus-url http://prometheus:9090 --aggregation max --metrics-window 1h --apply-to-values values.yaml
+helm resources my-release --prometheus-url http://prometheus:9090 --aggregation max --metrics-window 1h --values values.yaml
 ```
 
 This feature will:

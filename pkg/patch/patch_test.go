@@ -17,7 +17,6 @@ limitations under the License.
 package patch_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,7 +88,7 @@ func TestApplyPatchesToYaml(t *testing.T) {
 				RecommendedCPULimit:   200,
 				RecommendedMemLimit:   512 * 1024 * 1024,
 			},
-			expectErr: fmt.Errorf("workload not-found-service not found"),
+			expectErr: patch.ErrNotFound,
 		},
 		{
 			name: "simple service patch",
@@ -236,7 +235,7 @@ workers:
 			res, err := patch.ApplyPatchesToYaml(tt.yaml, tt.resources)
 
 			if tt.expectErr != nil {
-				assert.EqualError(t, err, tt.expectErr.Error())
+				assert.ErrorIs(t, err, tt.expectErr)
 
 				return
 			}
