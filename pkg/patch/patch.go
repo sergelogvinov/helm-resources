@@ -50,9 +50,10 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 	workloadPaths := findWorkloadPaths(values, workloadName)
 
 	if len(workloadPaths) == 0 {
-		if res.Release == res.Name && values["resources"] != nil {
+		switch {
+		case res.Release == res.Name && values["resources"] != nil:
 			containerName := res.Container
-			if containerName == res.Name {
+			if containerName == res.Chart {
 				containerName = ""
 			}
 
@@ -61,6 +62,15 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 					Section:  "",
 					Workload: containerName,
 				},
+			}
+		case values[toCamelCase(workloadName)] != nil:
+			if workloadData, ok := values[toCamelCase(workloadName)].(map[string]any); ok {
+				if _, ok := workloadData["resources"].(map[string]any); ok {
+					workloadPaths = append(workloadPaths, WorkloadPath{
+						Section:  "",
+						Workload: toCamelCase(workloadName),
+					})
+				}
 			}
 		}
 	}
@@ -92,7 +102,7 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 func findWorkloadPaths(values map[string]any, workloadName string) []WorkloadPath {
 	var paths []WorkloadPath
 
-	for _, section := range []string{"services", "workers"} {
+	for _, section := range []string{"services", "workers", "jobs"} {
 		if sectionData, ok := values[section].(map[string]any); ok {
 			if workloadData, ok := sectionData[workloadName].(map[string]any); ok {
 				if containers, ok := workloadData["containers"].([]any); ok {

@@ -16,7 +16,10 @@ limitations under the License.
 
 package patch
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func formatCPUForYaml(milliCores int64) string {
 	if milliCores >= 1000 {
@@ -32,4 +35,21 @@ func formatMemoryForYaml(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%dMi", bytes/(1024*1024))
+}
+
+func toCamelCase(input string) string {
+	parts := strings.Split(input, "-")
+	if len(parts) == 0 {
+		return input
+	}
+
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) == 0 {
+			continue
+		}
+
+		parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+	}
+
+	return strings.Join(parts, "")
 }

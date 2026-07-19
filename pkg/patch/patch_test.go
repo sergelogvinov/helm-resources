@@ -128,6 +128,35 @@ componentName:
 `,
 		},
 		{
+			name: "common deploy with component patch",
+			yaml: commonYAML,
+			resources: resources.ResourceRecommendation{
+				Release:               "common",
+				Name:                  "component-name",
+				RecommendedCPURequest: 100,
+				RecommendedMemRequest: 256 * 1024 * 1024,
+				RecommendedCPULimit:   200,
+				RecommendedMemLimit:   512 * 1024 * 1024,
+			},
+			expect: `
+someOtherField: someValue
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+componentName:
+  otherField: someValue
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+`,
+		},
+		{
 			name: "service not found",
 			yaml: simpleServiceYAML,
 			resources: resources.ResourceRecommendation{

@@ -32,6 +32,7 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 		}
 
 		rec := resources.ResourceRecommendation{
+			Chart:     r.Chart,
 			Release:   r.Release,
 			Kind:      r.Kind,
 			Name:      r.Name,

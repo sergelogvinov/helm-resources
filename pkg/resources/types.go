@@ -19,6 +19,7 @@ package resources
 
 // ResourceInfo represents the resource requests, limits, and usage for a container within a workload.
 type ResourceInfo struct {
+	Chart      string `json:"chart"`
 	Release    string `json:"release"`
 	Kind       string `json:"kind"`
 	Name       string `json:"name"`
@@ -34,6 +35,7 @@ type ResourceInfo struct {
 
 // ResourceRecommendation represents resource recommendation for a container within a workload.
 type ResourceRecommendation struct {
+	Chart                 string
 	Release               string
 	Kind                  string
 	Name                  string
