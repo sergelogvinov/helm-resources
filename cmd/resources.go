@@ -17,7 +17,6 @@ limitations under the License.
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,33 +26,22 @@ import (
 	"go.uber.org/multierr"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/release"
 
 	"github.com/sergelogvinov/helm-resources/pkg/metrics"
 	"github.com/sergelogvinov/helm-resources/pkg/patch"
 	"github.com/sergelogvinov/helm-resources/pkg/recommend"
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
+	apps "github.com/sergelogvinov/helm-resources/pkg/resources/apps"
 
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes"
-
-	"sigs.k8s.io/yaml"
 )
 
-const (
-	globalUsage = `
+const globalUsage = `
 Show resource requests and limits for all workloads in a helm release.
 
 This command analyzes a deployed helm release and displays the CPU and memory
 requests and limits for all deployments, statefulsets, daemonsets, and cronjobs managed by the release.
 `
-
-	unknown = "unknown"
-)
 
 func newResourcesCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -125,12 +113,12 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create metrics client: %w", err)
 	}
 
-	resources, err := extractResourcesFromHelmRelease(ctx, clientset, metricsClient, release)
+	resInfos, err := apps.ExtractResourcesFromHelmRelease(ctx, clientset, metricsClient, release)
 	if err != nil {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
 
-	recommendations := recommend.AnalyzeRecommendations(resources)
+	recommendations := recommend.AnalyzeRecommendations(resInfos)
 	if len(applyToValues) > 0 && len(recommendations) > 0 {
 		if err := applyRecommendationsToValuesFiles(recommendations, applyToValues); err != nil {
 			return err
@@ -139,186 +127,28 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	errs := []error{}
+	var errs error
 
 	switch outputFormat {
 	case "json":
-		if err = outputJSON(resources); err != nil {
-			errs = append(errs, err)
+		if err = outputJSON(resInfos); err != nil {
+			errs = multierr.Append(errs, err)
 		}
 	case "yaml":
-		if err = outputYAML(resources); err != nil {
-			errs = append(errs, err)
+		if err = outputYAML(resInfos); err != nil {
+			errs = multierr.Append(errs, err)
 		}
 	default:
-		if err = outputTable(resources); err != nil {
-			errs = append(errs, err)
+		if err = outputTable(resInfos); err != nil {
+			errs = multierr.Append(errs, err)
 		}
 
 		if err = outputTableRecommendations(recommendations); err != nil {
-			errs = append(errs, err)
+			errs = multierr.Append(errs, err)
 		}
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("encountered errors: %v", errs)
-	}
-
-	return nil
-}
-
-// nolint: cyclop,gocyclo
-func extractResourcesFromHelmRelease(
-	ctx context.Context,
-	clientset *kubernetes.Clientset,
-	metricsClient *metrics.Client,
-	release *release.Release,
-) ([]resources.ResourceInfo, error) {
-	var res []resources.ResourceInfo
-
-	namespace := release.Namespace
-	chartName := ""
-
-	if release.Chart != nil && release.Chart.Metadata != nil {
-		chartName = release.Chart.Metadata.Name
-	}
-
-	for doc := range strings.SplitSeq(release.Manifest, "---") {
-		doc = strings.TrimSpace(doc)
-		if doc == "" {
-			continue
-		}
-
-		var obj unstructured.Unstructured
-		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
-			continue // Skip invalid YAML
-		}
-
-		kind := obj.GetKind()
-		apiVersion := obj.GetAPIVersion()
-
-		standardWorkload := ((kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet") && apiVersion == "apps/v1") ||
-			(kind == "CronJob" && apiVersion == "batch/v1")
-		if !standardWorkload {
-			resCRD, err := extractResourcesFromCRD(ctx, clientset, metricsClient, release.Name, doc, namespace)
-			if err != nil {
-				continue
-			}
-
-			res = append(res, resCRD...)
-
-			continue
-		}
-
-		var (
-			containers   []v1.Container
-			workloadName string
-			replicas     string
-		)
-
-		switch kind {
-		case "Deployment":
-			var deployment appsv1.Deployment
-			if err := yaml.Unmarshal([]byte(doc), &deployment); err != nil {
-				continue
-			}
-
-			containers = deployment.Spec.Template.Spec.Containers
-			workloadName = deployment.Name
-
-			deployObj, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deployment.Name, metav1.GetOptions{})
-			if err != nil {
-				replicas = unknown
-			} else {
-				replicas = fmt.Sprintf("%d", deployObj.Status.ReadyReplicas)
-			}
-		case "StatefulSet":
-			var statefulSet appsv1.StatefulSet
-			if err := yaml.Unmarshal([]byte(doc), &statefulSet); err != nil {
-				continue
-			}
-
-			containers = statefulSet.Spec.Template.Spec.Containers
-			workloadName = statefulSet.Name
-
-			stsObj, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, statefulSet.Name, metav1.GetOptions{})
-			if err != nil {
-				replicas = unknown
-			} else {
-				replicas = fmt.Sprintf("%d", stsObj.Status.ReadyReplicas)
-			}
-		case "DaemonSet":
-			var daemonSet appsv1.DaemonSet
-			if err := yaml.Unmarshal([]byte(doc), &daemonSet); err != nil {
-				continue
-			}
-
-			containers = daemonSet.Spec.Template.Spec.Containers
-			workloadName = daemonSet.Name
-
-			dsObj, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, daemonSet.Name, metav1.GetOptions{})
-			if err != nil {
-				replicas = unknown
-			} else {
-				replicas = fmt.Sprintf("%d", dsObj.Status.NumberReady)
-			}
-		case "CronJob":
-			var cronJob batchv1.CronJob
-			if err := yaml.Unmarshal([]byte(doc), &cronJob); err != nil {
-				continue
-			}
-
-			containers = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers
-			workloadName = cronJob.Name
-
-			cronJobObj, err := clientset.BatchV1().CronJobs(namespace).Get(ctx, cronJob.Name, metav1.GetOptions{})
-			if err != nil {
-				replicas = unknown
-			} else {
-				replicas = fmt.Sprintf("%d", len(cronJobObj.Status.Active))
-			}
-		}
-
-		for _, container := range containers {
-			resInfo := resources.ResourceInfo{
-				Chart:     chartName,
-				Release:   release.Name,
-				Kind:      kind,
-				Name:      workloadName,
-				Replicas:  replicas,
-				Container: container.Name,
-			}
-
-			if container.Resources.Requests != nil {
-				if cpu := container.Resources.Requests[v1.ResourceCPU]; !cpu.IsZero() {
-					resInfo.CPURequest = cpu.MilliValue()
-				}
-
-				if mem := container.Resources.Requests[v1.ResourceMemory]; !mem.IsZero() {
-					resInfo.MemRequest = mem.Value()
-				}
-			}
-
-			if container.Resources.Limits != nil {
-				if cpu := container.Resources.Limits[v1.ResourceCPU]; !cpu.IsZero() {
-					resInfo.CPULimit = cpu.MilliValue()
-				}
-
-				if mem := container.Resources.Limits[v1.ResourceMemory]; !mem.IsZero() {
-					resInfo.MemLimit = mem.Value()
-				}
-			}
-
-			cpuUsage, memUsage := metricsClient.GetContainerMetrics(ctx, namespace, kind, workloadName, container.Name)
-
-			resInfo.CPUUsage = cpuUsage
-			resInfo.MemUsage = memUsage
-
-			res = append(res, resInfo)
-		}
-	}
-
-	return res, nil
+	return errs
 }
 
 func applyRecommendationsToValuesFiles(recommendations []resources.ResourceRecommendation, valuesFiles []string) error {

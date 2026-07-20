@@ -28,8 +28,9 @@ import (
 	v1prometheus "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 
+	"github.com/sergelogvinov/helm-resources/pkg/resources"
+
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/rest"
 	metricsv1 "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -105,36 +106,39 @@ func New(
 // Returns CPU in millicores and memory in bytes.
 func (m *Client) GetContainerMetrics(
 	ctx context.Context,
-	namespace,
-	kind,
-	workloadName,
-	containerName string,
+	namespace string,
+	res resources.ResourceInfo,
 ) (int64, int64) {
 	if m.prometheusClient != nil {
-		return m.getPrometheusMetrics(ctx, namespace, workloadName, containerName)
+		return m.getPrometheusMetrics(ctx, namespace, res)
+	}
+
+	var (
+		cpu int64
+		mem int64
+	)
+
+	if m.vpaClient != nil && cpu == 0 && mem == 0 {
+		cpu, mem = m.getVPAMetrics(ctx, namespace, res)
 	}
 
 	if m.metricsClient != nil {
-		return m.getKubernetesMetrics(ctx, namespace, kind, workloadName, containerName)
+		cpu, mem = m.getKubernetesMetrics(ctx, namespace, res)
 	}
 
-	if m.vpaClient != nil {
-		return m.getVPAMetrics(ctx, namespace, kind, workloadName, containerName)
-	}
-
-	return 0, 0
+	return cpu, mem
 }
 
 // getPrometheusMetrics retrieves CPU and memory usage from Prometheus
-func (m *Client) getPrometheusMetrics(ctx context.Context, namespace, workloadName, containerName string) (int64, int64) {
-	cpuQuery := fmt.Sprintf(`%s(rate(container_cpu_usage_seconds_total{namespace="%s",pod=~"%s.*",container="%s"}[%s])) * 1000`, m.aggregation, namespace, workloadName, containerName, m.metricsWindow)
+func (m *Client) getPrometheusMetrics(ctx context.Context, namespace string, res resources.ResourceInfo) (int64, int64) {
+	cpuQuery := fmt.Sprintf(`%s(rate(container_cpu_usage_seconds_total{namespace="%s",pod=~"%s.*",container="%s"}[%s])) * 1000`, m.aggregation, namespace, res.Name, res.Container, m.metricsWindow)
 
 	cpuResult, _, err := m.prometheusClient.Query(ctx, cpuQuery, time.Now())
 	if err != nil {
 		return 0, 0
 	}
 
-	memQuery := fmt.Sprintf(`%s(container_memory_usage_bytes{namespace="%s",pod=~"%s.*",container="%s"}[%s])`, m.aggregation, namespace, workloadName, containerName, m.metricsWindow)
+	memQuery := fmt.Sprintf(`%s(container_memory_usage_bytes{namespace="%s",pod=~"%s.*",container="%s"}[%s])`, m.aggregation, namespace, res.Name, res.Container, m.metricsWindow)
 
 	memResult, _, err := m.prometheusClient.Query(ctx, memQuery, time.Now())
 	if err != nil {
@@ -156,8 +160,8 @@ func (m *Client) getPrometheusMetrics(ctx context.Context, namespace, workloadNa
 
 // getKubernetesMetrics retrieves CPU and Memory usage for a container from the
 // Kubernetes Metrics API (metrics.k8s.io/v1).
-func (m *Client) getKubernetesMetrics(ctx context.Context, namespace, kind, workloadName, containerName string) (int64, int64) {
-	podMetricsList, err := m.metricsClient.MetricsV1beta1().PodMetricses(namespace).List(ctx, metav1.ListOptions{})
+func (m *Client) getKubernetesMetrics(ctx context.Context, namespace string, res resources.ResourceInfo) (int64, int64) {
+	podMetricsList, err := m.metricsClient.MetricsV1beta1().PodMetricses(namespace).List(ctx, resources.ListOptions(res.Labels))
 	if err != nil {
 		return 0, 0
 	}
@@ -171,20 +175,23 @@ func (m *Client) getKubernetesMetrics(ctx context.Context, namespace, kind, work
 	for _, podMetrics := range podMetricsList.Items {
 		podName := podMetrics.Name
 
-		if !m.podBelongsToWorkload(podName, kind, workloadName) {
+		if !m.podBelongsToWorkload(podName, res.Kind, res.Name) {
 			continue
 		}
 
 		for _, containerMetrics := range podMetrics.Containers {
-			if containerMetrics.Name != containerName {
+			if containerMetrics.Name != res.Container {
 				continue
 			}
 
-			cpu := containerMetrics.Usage[v1.ResourceCPU]
-			mem := containerMetrics.Usage[v1.ResourceMemory]
+			if cpu, ok := containerMetrics.Usage[v1.ResourceCPU]; ok {
+				totalCPU += cpu.MilliValue()
+			}
 
-			totalCPU += cpu.MilliValue()
-			totalMem += mem.Value()
+			if mem, ok := containerMetrics.Usage[v1.ResourceMemory]; ok {
+				totalMem += mem.Value()
+			}
+
 			count++
 		}
 	}
@@ -197,25 +204,25 @@ func (m *Client) getKubernetesMetrics(ctx context.Context, namespace, kind, work
 }
 
 // getVPAMetrics retrieves CPU and memory recommendations from VPA
-func (m *Client) getVPAMetrics(ctx context.Context, namespace, kind, workloadName, containerName string) (int64, int64) {
-	vpaList, err := m.vpaClient.AutoscalingV1().VerticalPodAutoscalers(namespace).List(ctx, metav1.ListOptions{})
+func (m *Client) getVPAMetrics(ctx context.Context, namespace string, res resources.ResourceInfo) (int64, int64) {
+	vpaList, err := m.vpaClient.AutoscalingV1().VerticalPodAutoscalers(namespace).List(ctx, resources.ListOptions(res.Labels))
 	if err != nil {
 		return 0, 0
 	}
 
 	for _, vpaItem := range vpaList.Items {
-		if vpaItem.Spec.TargetRef != nil && vpaItem.Spec.TargetRef.Name == workloadName && vpaItem.Spec.TargetRef.Kind == kind {
+		if vpaItem.Spec.TargetRef != nil && vpaItem.Spec.TargetRef.Name == res.Name && vpaItem.Spec.TargetRef.Kind == res.Kind {
 			if vpaItem.Status.Recommendation != nil {
-				for _, containerRec := range vpaItem.Status.Recommendation.ContainerRecommendations {
-					if containerRec.ContainerName == containerName {
+				for _, containerMetrics := range vpaItem.Status.Recommendation.ContainerRecommendations {
+					if containerMetrics.ContainerName == res.Container {
 						var cpuUsage, memUsage int64
 
-						if containerRec.Target != nil {
-							if cpu, ok := containerRec.Target["cpu"]; ok {
+						if containerMetrics.Target != nil {
+							if cpu, ok := containerMetrics.Target[v1.ResourceCPU]; ok {
 								cpuUsage = cpu.MilliValue()
 							}
 
-							if mem, ok := containerRec.Target["memory"]; ok {
+							if mem, ok := containerMetrics.Target[v1.ResourceMemory]; ok {
 								memUsage = mem.Value()
 							}
 						}
