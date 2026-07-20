@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const none = "<none>"
+const none = "-"
 
 func outputJSON(resources []resources.ResourceInfo) error {
 	encoder := json.NewEncoder(os.Stdout)
@@ -47,9 +47,12 @@ func outputYAML(resources []resources.ResourceInfo) error {
 	return nil
 }
 
-func outputTable(resources []resources.ResourceInfo) error {
+func outputTable(f *Flags, resources []resources.ResourceInfo) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "KIND\tNAME\tREPLICAS\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
+
+	if !f.NoHeaders {
+		fmt.Fprintf(w, "KIND\tNAME\tREPLICAS\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
+	}
 
 	for _, res := range resources {
 		requestsInfo := formatResourceValues(res.CPURequest, res.MemRequest)
@@ -69,25 +72,35 @@ func outputTable(resources []resources.ResourceInfo) error {
 	return w.Flush()
 }
 
-func outputTableRecommendations(recommendations []resources.ResourceRecommendation) error {
+func outputTableRecommendations(f *Flags, recommendations []resources.ResourceRecommendation) error {
 	if len(recommendations) > 0 {
-		fmt.Printf("\nRESOURCE RECOMMENDATIONS:\n\n")
-
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/MEM)\tLIMITS (CPU/MEM)\tUSAGE (CPU/MEM)\n")
+
+		if !f.NoHeaders {
+			if f.ShowStats {
+				fmt.Printf("\nResource recommendations to adjust:\n\n")
+			}
+
+			fmt.Fprintf(w, "KIND\tNAME\tCONTAINER\tREQUESTS (CPU/MEM)\tREQUESTS DIFF (%%)\tLIMITS (CPU/MEM)\tLIMITS DIFF (%%)\tUSAGE (CPU/MEM)\n")
+		}
 
 		for _, rec := range recommendations {
 			requestsInfo := formatResourceValues(rec.RecommendedCPURequest, rec.RecommendedMemRequest)
+			requestsDiff := formatPercentageDiff(rec.CurrentCPURequest, rec.RecommendedCPURequest, rec.CurrentMemRequest, rec.RecommendedMemRequest)
 			limitsInfo := formatResourceValues(rec.RecommendedCPULimit, rec.RecommendedMemLimit)
+			limitsDiff := formatPercentageDiff(rec.CurrentCPULimit, rec.RecommendedCPULimit, rec.CurrentMemLimit, rec.RecommendedMemLimit)
 			usageInfo := formatResourceValues(rec.CPUUsage, rec.MemUsage)
 
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				rec.Kind,
 				rec.Name,
 				rec.Container,
 				requestsInfo,
+				requestsDiff,
 				limitsInfo,
-				usageInfo)
+				limitsDiff,
+				usageInfo,
+			)
 		}
 
 		return w.Flush()
@@ -134,4 +147,33 @@ func formatMemory(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%d", bytes)
+}
+
+func formatPercentageDiff(currentCPU, recommendedCPU, currentMem, recommendedMem int64) string {
+	cpuDiff := calculatePercentageDiff(currentCPU, recommendedCPU)
+	memDiff := calculatePercentageDiff(currentMem, recommendedMem)
+
+	if cpuDiff == none && memDiff == none {
+		return none
+	}
+
+	return fmt.Sprintf("%s/%s", cpuDiff, memDiff)
+}
+
+func calculatePercentageDiff(current, recommended int64) string {
+	if current == 0 || recommended == 0 {
+		return none
+	}
+
+	diff := float64(recommended-current) / float64(current) * 100
+
+	if diff > 0 {
+		return fmt.Sprintf("+%.0f%%", diff)
+	}
+
+	if diff > -0.5 {
+		return "0%"
+	}
+
+	return fmt.Sprintf("%.0f%%", diff)
 }

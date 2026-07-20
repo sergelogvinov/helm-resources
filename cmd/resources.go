@@ -43,7 +43,16 @@ This command analyzes a deployed helm release and displays the CPU and memory
 requests and limits for all deployments, statefulsets, daemonsets, and cronjobs managed by the release.
 `
 
+// CommandOptions represents the options of the command.
+type CommandOptions struct {
+	Flags *Flags
+}
+
 func newResourcesCommand() *cobra.Command {
+	opts := CommandOptions{
+		Flags: DefaultFlags(),
+	}
+
 	cmd := &cobra.Command{
 		Use:   "resources [RELEASE] [flags]",
 		Short: "Show workload resources",
@@ -55,35 +64,21 @@ func newResourcesCommand() *cobra.Command {
 			"  helm resources my-release --values values.yaml",
 		}, "\n"),
 		Args: cobra.ExactArgs(1),
-		RunE: runResources,
+		RunE: opts.RunResources,
 	}
 
-	cmd.Flags().StringP("namespace", "n", "", "namespace of the release")
-	cmd.Flags().StringP("output", "o", "table", "output format (table, json, yaml)")
-	cmd.Flags().StringArrayP("values", "f", []string{}, "Apply recommendations to values.yaml file (can be specified multiple times)")
-	cmd.Flags().String("prometheus-url", "", "Prometheus server URL for metrics (e.g., http://prometheus:9090)")
-	cmd.Flags().String("metrics-window", "5m", "Time window for metrics queries (e.g., 5m, 1h, 24h)")
-	cmd.Flags().String("aggregation", "avg", "Aggregation function for metrics (avg, max)")
+	opts.Flags.AddFlags(cmd.Flags())
 
 	return cmd
 }
 
-func runResources(cmd *cobra.Command, args []string) error {
+// RunResources executes the helm-resources command.
+func (o *CommandOptions) RunResources(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	flags := cmd.Flags()
-
-	releaseName := args[0]
-	namespace, _ := flags.GetString("namespace")       //nolint: errcheck
-	outputFormat, _ := flags.GetString("output")       //nolint: errcheck
-	applyToValues, _ := flags.GetStringArray("values") //nolint: errcheck
-
-	prometheusURL, _ := flags.GetString("prometheus-url") //nolint: errcheck
-	metricsWindow, _ := flags.GetString("metrics-window") //nolint: errcheck
-	aggregation, _ := flags.GetString("aggregation")      //nolint: errcheck
 
 	settings := cli.New()
-	if namespace != "" {
-		settings.SetNamespace(namespace)
+	if o.Flags.Namespace != "" {
+		settings.SetNamespace(o.Flags.Namespace)
 	}
 
 	actionConfig := new(action.Configuration)
@@ -93,7 +88,7 @@ func runResources(cmd *cobra.Command, args []string) error {
 
 	getAction := action.NewGet(actionConfig)
 
-	release, err := getAction.Run(releaseName)
+	release, err := getAction.Run(args[0])
 	if err != nil {
 		return err
 	}
@@ -108,7 +103,7 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	metricsClient, err := metrics.New(prometheusURL, metricsWindow, aggregation, config)
+	metricsClient, err := metrics.New(o.Flags.PrometheusURL, o.Flags.MetricsWindow, o.Flags.Aggregation, config)
 	if err != nil {
 		return fmt.Errorf("failed to create metrics client: %w", err)
 	}
@@ -118,18 +113,16 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
 
-	recommendations := recommend.AnalyzeRecommendations(resInfos)
-	if len(applyToValues) > 0 && len(recommendations) > 0 {
-		if err := applyRecommendationsToValuesFiles(recommendations, applyToValues); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
 	var errs error
 
-	switch outputFormat {
+	recommendations := recommend.AnalyzeRecommendations(resInfos)
+	if len(o.Flags.Values) > 0 && len(recommendations) > 0 {
+		if err := applyRecommendationsToValuesFiles(recommendations, o.Flags.Values); err != nil {
+			errs = multierr.Append(errs, err)
+		}
+	}
+
+	switch o.Flags.Output {
 	case "json":
 		if err = outputJSON(resInfos); err != nil {
 			errs = multierr.Append(errs, err)
@@ -139,12 +132,16 @@ func runResources(cmd *cobra.Command, args []string) error {
 			errs = multierr.Append(errs, err)
 		}
 	default:
-		if err = outputTable(resInfos); err != nil {
-			errs = multierr.Append(errs, err)
+		if o.Flags.ShowStats && len(resInfos) > 0 {
+			if err = outputTable(o.Flags, resInfos); err != nil {
+				errs = multierr.Append(errs, err)
+			}
 		}
 
-		if err = outputTableRecommendations(recommendations); err != nil {
-			errs = multierr.Append(errs, err)
+		if o.Flags.ShowRecommendations && len(recommendations) > 0 {
+			if err = outputTableRecommendations(o.Flags, recommendations); err != nil {
+				errs = multierr.Append(errs, err)
+			}
 		}
 	}
 
