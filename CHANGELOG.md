@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/sergelogvinov/helm-resources/compare/v0.4.3...v0.5.0) (2026-07-20)
+
+
+### Features
+
+* integrate kubernetes metrics api ([2c1dae4](https://github.com/sergelogvinov/helm-resources/commit/2c1dae4bf7f881a4a6123473dfbc17535ffc09cf))
+* support component resource patching ([4fad5e9](https://github.com/sergelogvinov/helm-resources/commit/4fad5e95c74584f6e66b91a2b85d57a2594443cd))
+* support multiple files for patching ([07861f0](https://github.com/sergelogvinov/helm-resources/commit/07861f0c504c50f22bd6a295879b1340a85f7f4c))
+* support patching root workload resources ([b45b698](https://github.com/sergelogvinov/helm-resources/commit/b45b69804a8937a4ae1a48e9302da185e44af89f))
+
 ## [0.4.3](https://github.com/sergelogvinov/helm-resources/compare/v0.4.2...v0.4.3) (2026-06-10)
 
 
