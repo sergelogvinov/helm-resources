@@ -20,13 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/prometheus/client_golang/api"
-	v1prometheus "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
 	"helm.sh/helm/v3/pkg/action"
@@ -43,7 +39,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/yaml"
@@ -90,9 +85,10 @@ func runResources(cmd *cobra.Command, args []string) error {
 	flags := cmd.Flags()
 
 	releaseName := args[0]
-	namespace, _ := flags.GetString("namespace")          //nolint: errcheck
-	outputFormat, _ := flags.GetString("output")          //nolint: errcheck
-	applyToValues, _ := flags.GetStringArray("values")    //nolint: errcheck
+	namespace, _ := flags.GetString("namespace")       //nolint: errcheck
+	outputFormat, _ := flags.GetString("output")       //nolint: errcheck
+	applyToValues, _ := flags.GetStringArray("values") //nolint: errcheck
+
 	prometheusURL, _ := flags.GetString("prometheus-url") //nolint: errcheck
 	metricsWindow, _ := flags.GetString("metrics-window") //nolint: errcheck
 	aggregation, _ := flags.GetString("aggregation")      //nolint: errcheck
@@ -124,31 +120,12 @@ func runResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	var (
-		prometheusClient v1prometheus.API
-		vpaClient        vpa.Interface
-	)
-
-	if prometheusURL != "" {
-		promClient, err := api.NewClient(api.Config{
-			Address: prometheusURL,
-			RoundTripper: &http.Transport{
-				IdleConnTimeout: 30 * time.Second,
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create Prometheus client: %w", err)
-		}
-
-		prometheusClient = v1prometheus.NewAPI(promClient)
+	metricsClient, err := metrics.New(prometheusURL, metricsWindow, aggregation, config)
+	if err != nil {
+		return fmt.Errorf("failed to create metrics client: %w", err)
 	}
 
-	vpaClientset, err := vpa.NewForConfig(config)
-	if err == nil {
-		vpaClient = vpaClientset
-	}
-
-	resources, err := extractResourcesFromHelmRelease(ctx, clientset, vpaClient, prometheusClient, release, metricsWindow, aggregation)
+	resources, err := extractResourcesFromHelmRelease(ctx, clientset, metricsClient, release)
 	if err != nil {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
@@ -194,11 +171,8 @@ func runResources(cmd *cobra.Command, args []string) error {
 func extractResourcesFromHelmRelease(
 	ctx context.Context,
 	clientset *kubernetes.Clientset,
-	vpaClient vpa.Interface,
-	prometheusClient v1prometheus.API,
+	metricsClient *metrics.Client,
 	release *release.Release,
-	metricsWindow string,
-	aggregation string,
 ) ([]resources.ResourceInfo, error) {
 	var res []resources.ResourceInfo
 
@@ -226,7 +200,7 @@ func extractResourcesFromHelmRelease(
 		standardWorkload := ((kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet") && apiVersion == "apps/v1") ||
 			(kind == "CronJob" && apiVersion == "batch/v1")
 		if !standardWorkload {
-			resCRD, err := extractResourcesFromCRD(ctx, clientset, vpaClient, prometheusClient, release.Name, doc, namespace, metricsWindow, aggregation)
+			resCRD, err := extractResourcesFromCRD(ctx, clientset, metricsClient, release.Name, doc, namespace)
 			if err != nil {
 				continue
 			}
@@ -335,7 +309,7 @@ func extractResourcesFromHelmRelease(
 				}
 			}
 
-			cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, kind, workloadName, container.Name, metricsWindow, aggregation)
+			cpuUsage, memUsage := metricsClient.GetContainerMetrics(ctx, namespace, kind, workloadName, container.Name)
 
 			resInfo.CPUUsage = cpuUsage
 			resInfo.MemUsage = memUsage

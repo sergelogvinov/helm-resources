@@ -20,13 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	v1prometheus "github.com/prometheus/client_golang/api/prometheus/v1"
-
 	"github.com/sergelogvinov/helm-resources/pkg/metrics"
 	"github.com/sergelogvinov/helm-resources/pkg/resources"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/yaml"
@@ -35,13 +32,10 @@ import (
 func extractResourcesFromCRD(
 	ctx context.Context,
 	clientset *kubernetes.Clientset,
-	vpaClient vpa.Interface,
-	prometheusClient v1prometheus.API,
+	metricsClient *metrics.Client,
 	release string,
 	manifest string,
-	namespace,
-	metricsWindow,
-	aggregation string,
+	namespace string,
 ) ([]resources.ResourceInfo, error) {
 	var res []resources.ResourceInfo
 
@@ -55,11 +49,11 @@ func extractResourcesFromCRD(
 
 	switch apiVersion + "/" + kind { //nolint:gocritic
 	case "postgresql.cnpg.io/v1/Cluster":
-		return extractCNPGClusterResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
+		return extractCNPGClusterResources(ctx, clientset, metricsClient, release, obj, namespace)
 	case "postgresql.cnpg.io/v1/Pooler":
-		return extractCNPGPoolerResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
+		return extractCNPGPoolerResources(ctx, clientset, metricsClient, release, obj, namespace)
 	case "clickhouse.altinity.com/v1/ClickHouseInstallation":
-		return extractClickHouseInstallationResources(ctx, clientset, vpaClient, prometheusClient, release, obj, namespace, metricsWindow, aggregation)
+		return extractClickHouseInstallationResources(ctx, clientset, metricsClient, release, obj, namespace)
 	}
 
 	return res, nil
@@ -69,13 +63,10 @@ func extractResourcesFromCRD(
 func extractCNPGClusterResources(
 	ctx context.Context,
 	_ *kubernetes.Clientset,
-	vpaClient vpa.Interface,
-	prometheusClient v1prometheus.API,
+	metricsClient *metrics.Client,
 	release string,
 	obj unstructured.Unstructured,
-	namespace,
-	metricsWindow,
-	aggregation string,
+	namespace string,
 ) ([]resources.ResourceInfo, error) {
 	clusterName := obj.GetName()
 
@@ -101,7 +92,7 @@ func extractCNPGClusterResources(
 		extractContainerResources(resourcesSpec, &resInfo)
 	}
 
-	cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, resInfo.Kind, clusterName, resInfo.Container, metricsWindow, aggregation)
+	cpuUsage, memUsage := metricsClient.GetContainerMetrics(ctx, namespace, resInfo.Kind, clusterName, resInfo.Container)
 	resInfo.CPUUsage = cpuUsage
 	resInfo.MemUsage = memUsage
 
@@ -112,13 +103,10 @@ func extractCNPGClusterResources(
 func extractCNPGPoolerResources(
 	ctx context.Context,
 	_ *kubernetes.Clientset,
-	vpaClient vpa.Interface,
-	prometheusClient v1prometheus.API,
+	metricsClient *metrics.Client,
 	release string,
 	obj unstructured.Unstructured,
-	namespace,
-	metricsWindow,
-	aggregation string,
+	namespace string,
 ) ([]resources.ResourceInfo, error) {
 	poolerName := obj.GetName()
 
@@ -152,7 +140,7 @@ func extractCNPGPoolerResources(
 		}
 	}
 
-	cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, resInfo.Kind, poolerName, resInfo.Container, metricsWindow, aggregation)
+	cpuUsage, memUsage := metricsClient.GetContainerMetrics(ctx, namespace, resInfo.Kind, poolerName, resInfo.Container)
 	resInfo.CPUUsage = cpuUsage
 	resInfo.MemUsage = memUsage
 
@@ -165,13 +153,10 @@ func extractCNPGPoolerResources(
 func extractClickHouseInstallationResources(
 	ctx context.Context,
 	_ *kubernetes.Clientset,
-	vpaClient vpa.Interface,
-	prometheusClient v1prometheus.API,
+	metricsClient *metrics.Client,
 	release string,
 	obj unstructured.Unstructured,
-	namespace,
-	metricsWindow,
-	aggregation string,
+	namespace string,
 ) ([]resources.ResourceInfo, error) {
 	installationName := obj.GetName()
 	clusterName := installationName
@@ -234,7 +219,7 @@ func extractClickHouseInstallationResources(
 		}
 	}
 
-	cpuUsage, memUsage := metrics.GetContainerMetrics(ctx, vpaClient, prometheusClient, namespace, resInfo.Kind, "chi-"+installationName+"-"+clusterName, resInfo.Container, metricsWindow, aggregation)
+	cpuUsage, memUsage := metricsClient.GetContainerMetrics(ctx, namespace, resInfo.Kind, "chi-"+installationName+"-"+clusterName, resInfo.Container)
 	resInfo.CPUUsage = cpuUsage
 	resInfo.MemUsage = memUsage
 

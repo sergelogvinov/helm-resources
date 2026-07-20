@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package recommend provides functionality to analyze resource usage and generate recommendations for Kubernetes workloads.
 package recommend
 
 import (
@@ -49,11 +48,11 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 		rec.CurrentMemLimit = r.MemLimit
 
 		if r.CPUUsage > 0 && r.CPURequest > 0 && r.CPUUsage > r.CPURequest {
-			recommendedCPU := roundUpCPU(int64(float64(r.CPUUsage) * 1.2))
+			recommendedCPU := roundUpCPULow(r.CPUUsage)
 			rec.RecommendedCPURequest = recommendedCPU
 
-			recommendedCPULimit := roundUpCPU(int64(float64(r.CPUUsage) * 2.0))
-			if recommendedCPULimit != rec.CurrentCPULimit {
+			recommendedCPULimit := roundUpCPUHigh(r.CPUUsage)
+			if recommendedCPULimit >= rec.CurrentCPULimit {
 				rec.RecommendedCPULimit = recommendedCPULimit
 			}
 
@@ -61,11 +60,11 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 		}
 
 		if r.MemUsage > 0 && r.MemRequest > 0 && r.MemUsage > r.MemRequest {
-			recommendedMem := roundUpMemory(int64(float64(r.MemUsage) * 1.2))
+			recommendedMem := roundUpMemoryLow(r.MemUsage)
 			rec.RecommendedMemRequest = recommendedMem
 
-			recommendedMemLimit := roundUpMemory(int64(float64(r.MemUsage) * 2.0))
-			if recommendedMemLimit != rec.CurrentMemLimit {
+			recommendedMemLimit := roundUpMemoryHigh(r.MemUsage)
+			if recommendedMemLimit >= rec.CurrentMemLimit {
 				rec.RecommendedMemLimit = recommendedMemLimit
 			}
 
@@ -78,24 +77,4 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 	}
 
 	return recommendations
-}
-
-func roundUpCPU(milliCores int64) int64 {
-	if milliCores <= 0 {
-		return int64(100)
-	}
-
-	increment := int64(500) // 500m
-
-	return ((milliCores + increment - 1) / increment) * increment
-}
-
-func roundUpMemory(bytes int64) int64 {
-	if bytes <= 0 {
-		return int64(64 * 1024 * 1024)
-	}
-
-	increment := int64(128 * 1024 * 1024) // 128Mi in bytes
-
-	return ((bytes + increment - 1) / increment) * increment
 }
