@@ -19,35 +19,40 @@ package resources
 
 // ResourceInfo represents the resource requests, limits, and usage for a container within a workload.
 type ResourceInfo struct {
-	Chart      string `json:"chart"`
-	Release    string `json:"release"`
-	Kind       string `json:"kind"`
-	Name       string `json:"name"`
-	Replicas   string `json:"replicas,omitempty"`
-	Container  string `json:"container"`
-	CPURequest int64  `json:"cpu_request,omitempty"`    // millicores
-	CPULimit   int64  `json:"cpu_limit,omitempty"`      // millicores
-	MemRequest int64  `json:"memory_request,omitempty"` // bytes
-	MemLimit   int64  `json:"memory_limit,omitempty"`   // bytes
-	CPUUsage   int64  `json:"cpu_usage,omitempty"`      // millicores
-	MemUsage   int64  `json:"memory_usage,omitempty"`   // bytes
+	Chart     string `json:"chart"`
+	Release   string `json:"release"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Replicas  string `json:"replicas,omitempty"`
+	Container string `json:"container"`
+	// Usage
+	CPUUsage int64 `json:"cpu_usage,omitempty"`    // millicores
+	MemUsage int64 `json:"memory_usage,omitempty"` // bytes
+	// Requests
+	CPURequest int64 `json:"cpu_request,omitempty"`    // millicores
+	MemRequest int64 `json:"memory_request,omitempty"` // bytes
+	// Limits
+	CPULimit int64 `json:"cpu_limit,omitempty"`    // millicores
+	MemLimit int64 `json:"memory_limit,omitempty"` // bytes
 }
 
 // ResourceRecommendation represents resource recommendation for a container within a workload.
 type ResourceRecommendation struct {
-	Chart                 string
-	Release               string
-	Kind                  string
-	Name                  string
-	Container             string
-	CPUUsage              int64 // millicores
-	MemUsage              int64 // bytes
+	Chart     string
+	Release   string
+	Kind      string
+	Name      string
+	Container string
+	CPUUsage  int64 // millicores
+	MemUsage  int64 // bytes
+	// Requests
 	CurrentCPURequest     int64 // millicores
 	RecommendedCPURequest int64 // millicores
 	CurrentMemRequest     int64 // bytes
 	RecommendedMemRequest int64 // bytes
-	CurrentCPULimit       int64 // millicores
-	RecommendedCPULimit   int64 // millicores
-	CurrentMemLimit       int64 // bytes
-	RecommendedMemLimit   int64 // bytes
+	// Limits
+	CurrentCPULimit     int64 // millicores
+	RecommendedCPULimit int64 // millicores
+	CurrentMemLimit     int64 // bytes
+	RecommendedMemLimit int64 // bytes
 }
