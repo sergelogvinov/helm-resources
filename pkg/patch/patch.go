@@ -366,15 +366,34 @@ func addMissingResourceStructure(
 			strings.Repeat(" ", baseIndent+2) + resource + ": " + newValue,
 		}
 		insertPos = findInsertPosition(lines, resourcesLine, resourcesIndent)
+
+		// An empty inline resources block (e.g. "resources: {}") must drop
+		// the "{}" marker so the new fields can be inserted underneath it.
+		if resourcesLine >= 0 {
+			lines[resourcesLine] = stripInlineEmptyMap(lines[resourcesLine])
+		}
 	default:
 		baseIndent := resourceTypeIndent + 2
 		insertLines = []string{
 			strings.Repeat(" ", baseIndent) + resource + ": " + newValue,
 		}
 		insertPos = findInsertPosition(lines, resourceTypeLine, resourceTypeIndent)
+
+		// An empty inline type block (e.g. "limits: {}").
+		if resourceTypeLine >= 0 {
+			lines[resourceTypeLine] = stripInlineEmptyMap(lines[resourceTypeLine])
+		}
 	}
 
 	return append(lines[:insertPos], append(insertLines, lines[insertPos:]...)...)
+}
+
+func stripInlineEmptyMap(line string) string {
+	if !strings.HasSuffix(strings.TrimSpace(line), "{}") {
+		return line
+	}
+
+	return strings.TrimRight(strings.TrimSuffix(line, "{}"), " \t")
 }
 
 func findInsertPosition(lines []string, startLine, baseIndent int) int {

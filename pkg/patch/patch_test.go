@@ -44,6 +44,25 @@ componentName:
       memory: 768Mi
 `
 
+	complexYAML = `
+someOtherField: someValue
+resources: {}
+
+configRaw: |-
+  some config
+  with multiple lines
+
+componentName:
+  otherField: someValue
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 768Mi
+`
+
 	simpleServiceYAML = `
 someOtherField: someValue
 services:
@@ -154,6 +173,42 @@ componentName:
     requests:
       cpu: 100m
       memory: 256Mi
+`,
+		},
+		{
+			name: "common deploy with complex yaml",
+			yaml: complexYAML,
+			resources: resources.ResourceRecommendation{
+				Release:               "common",
+				Name:                  "common",
+				RecommendedCPURequest: 100,
+				RecommendedMemRequest: 256 * 1024 * 1024,
+				RecommendedCPULimit:   200,
+				RecommendedMemLimit:   512 * 1024 * 1024,
+			},
+			expect: `
+someOtherField: someValue
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+configRaw: |-
+  some config
+  with multiple lines
+
+componentName:
+  otherField: someValue
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 768Mi
 `,
 		},
 		{
