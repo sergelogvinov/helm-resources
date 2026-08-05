@@ -54,6 +54,11 @@ configRaw: |-
 
 componentName:
   otherField: someValue
+  metrics: |-
+    resources:
+      requests:
+        cpu: 100m
+
   resources:
     limits:
       cpu: 500m
@@ -202,6 +207,11 @@ configRaw: |-
 
 componentName:
   otherField: someValue
+  metrics: |-
+    resources:
+      requests:
+        cpu: 100m
+
   resources:
     limits:
       cpu: 500m
@@ -210,6 +220,20 @@ componentName:
       cpu: 100m
       memory: 768Mi
 `,
+		},
+		{
+			name: "common deploy with complex yaml not found",
+			yaml: complexYAML,
+			resources: resources.ResourceRecommendation{
+				Release:               "common",
+				Name:                  "common",
+				Container:             "metrics",
+				RecommendedCPURequest: 200,
+				RecommendedMemRequest: 256 * 1024 * 1024,
+				RecommendedCPULimit:   200,
+				RecommendedMemLimit:   512 * 1024 * 1024,
+			},
+			expectErr: patch.ErrNotFound,
 		},
 		{
 			name: "service not found",

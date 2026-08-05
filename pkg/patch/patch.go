@@ -86,7 +86,7 @@ func ApplyPatchesToYaml(yamlText string, res resources.ResourceRecommendation) (
 
 		newText, err := applyResourcePatchesToPath(yamlText, path, res)
 		if err != nil {
-			return "", fmt.Errorf("failed to apply resource patches to path %w", err)
+			return "", fmt.Errorf("failed to apply resource patches to path: %w", err)
 		}
 
 		yamlText = newText
@@ -212,7 +212,7 @@ func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
 			return i - 1, indent, nil
 		}
 
-		return -1, 0, fmt.Errorf("target location not found")
+		return -1, 0, ErrNotFound
 	}
 
 	for i, line := range lines {
@@ -228,7 +228,7 @@ func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
 		}
 
 		if !workloadFound {
-			if strings.HasPrefix(trimmed, path.Workload+":") {
+			if strings.HasPrefix(trimmed, path.Workload+":") && !lineHasValue(trimmed) {
 				workloadFound = true
 
 				if path.Container == "" {
@@ -264,7 +264,7 @@ func findTargetLocation(lines []string, path WorkloadPath) (int, int, error) {
 		}
 	}
 
-	return -1, 0, fmt.Errorf("target location not found: %s/%s/%s", path.Section, path.Workload, path.Container)
+	return -1, 0, fmt.Errorf("target location %s/%s/%s: %w", path.Section, path.Workload, path.Container, ErrNotFound)
 }
 
 func findResourcesSection(lines []string, startLine, baseIndent int) (int, int) {
@@ -394,6 +394,27 @@ func stripInlineEmptyMap(line string) string {
 	}
 
 	return strings.TrimRight(strings.TrimSuffix(line, "{}"), " \t")
+}
+
+// lineHasValue reports whether a YAML line carries a scalar value, for example
+// "metrics: |-" or "cpu: 100m". Structural markers such as anchors, aliases,
+// and empty inline collections ("{}", "[]") are not considered values.
+func lineHasValue(line string) bool {
+	keyVal := strings.SplitN(strings.TrimSpace(line), ":", 2)
+	if len(keyVal) < 2 {
+		return false
+	}
+
+	value := strings.TrimSpace(strings.TrimSuffix(keyVal[1], "#"))
+
+	switch {
+	case value == "", value == "{}", value == "[]":
+		return false
+	case strings.HasPrefix(value, "&"), strings.HasPrefix(value, "*"):
+		return false
+	}
+
+	return true
 }
 
 func findInsertPosition(lines []string, startLine, baseIndent int) int {
