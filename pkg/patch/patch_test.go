@@ -28,7 +28,7 @@ import (
 const (
 	commonYAML = `
 someOtherField: someValue
-resources:
+resources: # Comment lines
   requests:
     cpu: 50m
     memory: 128Mi
@@ -46,7 +46,7 @@ componentName:
 
 	complexYAML = `
 someOtherField: someValue
-resources: {}
+resources: {}  # Undefined values comment example
 
 configRaw: |-
   some config
@@ -132,7 +132,7 @@ func TestApplyPatchesToYaml(t *testing.T) {
 			},
 			expect: `
 someOtherField: someValue
-resources:
+resources: # Comment lines
   requests:
     cpu: 100m
     memory: 256Mi
@@ -164,7 +164,7 @@ componentName:
 			},
 			expect: `
 someOtherField: someValue
-resources:
+resources: # Comment lines
   requests:
     cpu: 50m
     memory: 128Mi
