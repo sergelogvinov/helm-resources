@@ -389,11 +389,17 @@ func addMissingResourceStructure(
 }
 
 func stripInlineEmptyMap(line string) string {
-	if !strings.HasSuffix(strings.TrimSpace(line), "{}") {
+	keyVal := strings.SplitN(line, ":", 2)
+	if len(keyVal) < 2 {
 		return line
 	}
 
-	return strings.TrimRight(strings.TrimSuffix(line, "{}"), " \t")
+	value := strings.TrimLeft(keyVal[1], " ")
+	if !strings.HasPrefix(value, "{}") {
+		return line
+	}
+
+	return keyVal[0] + ":"
 }
 
 // lineHasValue reports whether a YAML line carries a scalar value, for example
