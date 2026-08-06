@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/sergelogvinov/helm-resources/compare/v0.5.0...v0.5.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* handle comments after inline empty maps ([b4cb27d](https://github.com/sergelogvinov/helm-resources/commit/b4cb27d1d7a1de7278c22df174ff2c403ddd95ad))
+* handle empty inline maps when adding resource structure ([ed12fde](https://github.com/sergelogvinov/helm-resources/commit/ed12fdebfe75351c0ed6fca1d1f9f9613f56e2c6))
+* match keys with scalar values ([63c8524](https://github.com/sergelogvinov/helm-resources/commit/63c852437c7e2d04be9ab8270644d14367d60202))
+
 ## [0.5.0](https://github.com/sergelogvinov/helm-resources/compare/v0.4.3...v0.5.0) (2026-07-20)
 
 
