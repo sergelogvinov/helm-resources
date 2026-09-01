@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/sergelogvinov/helm-resources/compare/v0.5.1...v0.6.0) (2026-09-01)
+
+
+### Features
+
+* reduce recommended resources ([f9a5220](https://github.com/sergelogvinov/helm-resources/commit/f9a52203b30b235aa3c24096af818e32582227fe))
+
 ## [0.5.1](https://github.com/sergelogvinov/helm-resources/compare/v0.5.0...v0.5.1) (2026-08-06)
 
 
