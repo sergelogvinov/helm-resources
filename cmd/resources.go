@@ -113,9 +113,14 @@ func (o *CommandOptions) RunResources(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to extract resources: %w", err)
 	}
 
+	recommendationTypes, err := o.Flags.ParseRecommendations()
+	if err != nil {
+		return fmt.Errorf("failed to parse recommendations: %w", err)
+	}
+
 	var errs error
 
-	recommendations := recommend.AnalyzeRecommendations(resInfos)
+	recommendations := filterRecommendations(recommendationTypes, recommend.AnalyzeRecommendations(resInfos))
 	if len(o.Flags.Values) > 0 && len(recommendations) > 0 {
 		if err := applyRecommendationsToValuesFiles(recommendations, o.Flags.Values); err != nil {
 			errs = multierr.Append(errs, err)
@@ -201,4 +206,69 @@ func applyRecommendationsToValuesFiles(recommendations []resources.ResourceRecom
 	}
 
 	return errs
+}
+
+// filterRecommendations filters recommendations based on the recommendations flag.
+// Valid values are 'lo' (lower resources needed) and 'hi' (higher resources needed).
+func filterRecommendations(recommendationTypes map[string]bool, recommendations []resources.ResourceRecommendation) []resources.ResourceRecommendation {
+	// If no recommendation types are specified, return all recommendations as-is.
+	if len(recommendationTypes) == 0 {
+		return recommendations
+	}
+
+	var filtered []resources.ResourceRecommendation
+
+	for _, rec := range recommendations {
+		shouldInclude := false
+
+		if rec.CurrentCPURequest > 0 && rec.RecommendedCPURequest > 0 {
+			switch {
+			case recommendationTypes["lo"] && rec.CurrentCPURequest > rec.RecommendedCPURequest:
+				shouldInclude = true
+			case recommendationTypes["hi"] && rec.CurrentCPURequest < rec.RecommendedCPURequest:
+				shouldInclude = true
+			default:
+				rec.RecommendedCPURequest = 0
+			}
+		}
+
+		if rec.CurrentCPULimit > 0 && rec.RecommendedCPULimit > 0 {
+			switch {
+			case recommendationTypes["lo"] && rec.CurrentCPULimit > rec.RecommendedCPULimit:
+				shouldInclude = true
+			case recommendationTypes["hi"] && rec.CurrentCPULimit < rec.RecommendedCPULimit:
+				shouldInclude = true
+			default:
+				rec.RecommendedCPULimit = 0
+			}
+		}
+
+		if rec.CurrentMemRequest > 0 && rec.RecommendedMemRequest > 0 {
+			switch {
+			case recommendationTypes["lo"] && rec.CurrentMemRequest > rec.RecommendedMemRequest:
+				shouldInclude = true
+			case recommendationTypes["hi"] && rec.CurrentMemRequest < rec.RecommendedMemRequest:
+				shouldInclude = true
+			default:
+				rec.RecommendedMemRequest = 0
+			}
+		}
+
+		if rec.CurrentMemLimit > 0 && rec.RecommendedMemLimit > 0 {
+			switch {
+			case recommendationTypes["lo"] && rec.CurrentMemLimit > rec.RecommendedMemLimit:
+				shouldInclude = true
+			case recommendationTypes["hi"] && rec.CurrentMemLimit < rec.RecommendedMemLimit:
+				shouldInclude = true
+			default:
+				rec.RecommendedMemLimit = 0
+			}
+		}
+
+		if shouldInclude {
+			filtered = append(filtered, rec)
+		}
+	}
+
+	return filtered
 }

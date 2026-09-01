@@ -17,7 +17,9 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/pflag"
 )
@@ -34,6 +36,7 @@ const (
 	envAggregation          = "AGGREGATION"
 	flagShowStats           = "show-stats"
 	flagShowRecommendations = "show-recommendations"
+	flagRecommendations     = "recommendations"
 	flagNoHeaders           = "no-headers"
 )
 
@@ -47,6 +50,7 @@ type Flags struct {
 	Aggregation         string
 	ShowStats           bool
 	ShowRecommendations bool
+	Recommendations     string
 	NoHeaders           bool
 }
 
@@ -73,6 +77,7 @@ func (f *Flags) AddFlags(flags *pflag.FlagSet) {
 	// Output formatting flags
 	flags.BoolVar(&f.ShowStats, flagShowStats, f.ShowStats, "Show resource statistics")
 	flags.BoolVar(&f.ShowRecommendations, flagShowRecommendations, f.ShowRecommendations, "Show resource recommendations")
+	flags.StringVarP(&f.Recommendations, flagRecommendations, "r", "lo,hi", "Filter recommendations: 'lo' (lower resources needed), 'hi' (higher resources needed), or comma-separated")
 	flags.BoolVar(&f.NoHeaders, flagNoHeaders, f.NoHeaders, "Do not print table headers")
 }
 
@@ -83,4 +88,28 @@ func withDefaultString(key string, def string) string {
 	}
 
 	return val
+}
+
+// ParseRecommendations parses the recommendations flag value and returns a map of recommendation types.
+// Valid values are 'lo' (lower resources needed) and 'hi' (higher resources needed).
+func (f *Flags) ParseRecommendations() (map[string]bool, error) {
+	if f.Recommendations == "" {
+		return nil, nil
+	}
+
+	recommendations := map[string]bool{
+		"lo": false,
+		"hi": false,
+	}
+
+	for t := range strings.SplitSeq(f.Recommendations, ",") {
+		trimmed := strings.TrimSpace(strings.ToLower(t))
+		if trimmed == "lo" || trimmed == "hi" {
+			recommendations[trimmed] = true
+		} else {
+			return nil, fmt.Errorf("invalid recommendation type: %s (valid: 'lo', 'hi', or comma-separated 'lo,hi')", t)
+		}
+	}
+
+	return recommendations, nil
 }

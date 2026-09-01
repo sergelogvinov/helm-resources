@@ -30,27 +30,31 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 			continue
 		}
 
+		needsUpdate := false
+
 		rec := resources.ResourceRecommendation{
 			Chart:     r.Chart,
 			Release:   r.Release,
 			Kind:      r.Kind,
 			Name:      r.Name,
 			Container: r.Container,
+
+			CPUUsage:              r.CPUUsage,
+			MemUsage:              r.MemUsage,
+			CurrentCPURequest:     r.CPURequest,
+			CurrentMemRequest:     r.MemRequest,
+			CurrentCPULimit:       r.CPULimit,
+			CurrentMemLimit:       r.MemLimit,
+			RecommendedCPURequest: roundUpCPULow(r.CPUUsage),
+			RecommendedMemRequest: roundUpMemoryLow(r.MemUsage),
 		}
 
-		needsUpdate := false
+		if (rec.RecommendedCPURequest != rec.CurrentCPURequest) ||
+			(rec.RecommendedMemRequest != rec.CurrentMemRequest) {
+			needsUpdate = true
+		}
 
-		rec.CPUUsage = r.CPUUsage
-		rec.MemUsage = r.MemUsage
-		rec.CurrentCPURequest = r.CPURequest
-		rec.CurrentMemRequest = r.MemRequest
-		rec.CurrentCPULimit = r.CPULimit
-		rec.CurrentMemLimit = r.MemLimit
-
-		if r.CPUUsage > 0 && r.CPURequest > 0 && r.CPUUsage > r.CPURequest {
-			recommendedCPU := roundUpCPULow(r.CPUUsage)
-			rec.RecommendedCPURequest = recommendedCPU
-
+		if r.CPULimit > 0 {
 			recommendedCPULimit := roundUpCPUHigh(r.CPUUsage)
 			if recommendedCPULimit >= rec.CurrentCPULimit {
 				rec.RecommendedCPULimit = recommendedCPULimit
@@ -59,10 +63,7 @@ func AnalyzeRecommendations(res []resources.ResourceInfo) []resources.ResourceRe
 			needsUpdate = true
 		}
 
-		if r.MemUsage > 0 && r.MemRequest > 0 && r.MemUsage > r.MemRequest {
-			recommendedMem := roundUpMemoryLow(r.MemUsage)
-			rec.RecommendedMemRequest = recommendedMem
-
+		if r.MemLimit > 0 {
 			recommendedMemLimit := roundUpMemoryHigh(r.MemUsage)
 			if recommendedMemLimit >= rec.CurrentMemLimit {
 				rec.RecommendedMemLimit = recommendedMemLimit
