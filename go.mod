@@ -10,10 +10,10 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/multierr v1.11.0
 	helm.sh/helm/v3 v3.21.3
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
+	k8s.io/api v0.37.0
+	k8s.io/apimachinery v0.37.0
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.7.1
-	k8s.io/client-go v0.36.3
+	k8s.io/client-go v0.37.0
 	k8s.io/metrics v0.36.3
 	sigs.k8s.io/yaml v1.6.0
 )
