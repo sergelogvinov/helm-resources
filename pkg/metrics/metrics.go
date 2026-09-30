@@ -34,15 +34,17 @@ import (
 	vpa "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/client-go/rest"
 	metricsv1 "k8s.io/metrics/pkg/client/clientset/versioned"
+	"k8s.io/metrics/pkg/client/custom_metrics"
 )
 
 // Client provides methods to retrieve resource usage metrics for Kubernetes workloads.
 type Client struct {
-	vpaClient        vpa.Interface
-	prometheusClient v1prometheus.API
-	metricsClient    metricsv1.Interface
-	metricsWindow    string
-	aggregation      string
+	vpaClient           vpa.Interface
+	prometheusClient    v1prometheus.API
+	customMetricsClient custom_metrics.CustomMetricsClient
+	metricsClient       metricsv1.Interface
+	metricsWindow       string
+	aggregation         string
 }
 
 // New creates a new Client with the provided clients and configuration.
@@ -56,9 +58,10 @@ func New(
 	config *rest.Config,
 ) (*Client, error) {
 	var (
-		prometheusClient v1prometheus.API
-		vpaClient        vpa.Interface
-		metricsClient    metricsv1.Interface
+		prometheusClient    v1prometheus.API
+		vpaClient           vpa.Interface
+		customMetricsClient custom_metrics.CustomMetricsClient
+		metricsClient       metricsv1.Interface
 	)
 
 	if prometheusURL != "" {
@@ -83,6 +86,13 @@ func New(
 	}
 
 	if config != nil {
+		customClient, err := newCustomMetricsClient(config)
+		if err == nil {
+			customMetricsClient = customClient
+		}
+	}
+
+	if config != nil {
 		metricsClientset, err := metricsv1.NewForConfig(config)
 		if err == nil {
 			metricsClient = metricsClientset
@@ -94,11 +104,12 @@ func New(
 	}
 
 	return &Client{
-		vpaClient:        vpaClient,
-		prometheusClient: prometheusClient,
-		metricsClient:    metricsClient,
-		metricsWindow:    metricsWindow,
-		aggregation:      aggregation,
+		vpaClient:           vpaClient,
+		prometheusClient:    prometheusClient,
+		customMetricsClient: customMetricsClient,
+		metricsClient:       metricsClient,
+		metricsWindow:       metricsWindow,
+		aggregation:         aggregation,
 	}, nil
 }
 
@@ -118,12 +129,28 @@ func (m *Client) GetContainerMetrics(
 		mem int64
 	)
 
-	if m.vpaClient != nil && cpu == 0 && mem == 0 {
-		cpu, mem = m.getVPAMetrics(ctx, namespace, res)
+	// fill sets only the values still missing, so a partial result
+	// (e.g. VPA controlling only CPU) falls back to the next source.
+	fill := func(cpuValue, memValue int64) {
+		if cpu == 0 {
+			cpu = cpuValue
+		}
+
+		if mem == 0 {
+			mem = memValue
+		}
 	}
 
-	if m.metricsClient != nil {
-		cpu, mem = m.getKubernetesMetrics(ctx, namespace, res)
+	if m.vpaClient != nil {
+		fill(m.getVPAMetrics(ctx, namespace, res))
+	}
+
+	if m.customMetricsClient != nil && (cpu == 0 || mem == 0) {
+		fill(m.getCustomMetrics(namespace, res))
+	}
+
+	if m.metricsClient != nil && (cpu == 0 || mem == 0) {
+		fill(m.getKubernetesMetrics(ctx, namespace, res))
 	}
 
 	return cpu, mem

@@ -86,6 +86,7 @@ func ExtractResourcesFromHelmRelease(
 
 		var (
 			containers   []v1.Container
+			podSpec      v1.PodSpec
 			workloadName string
 			replicas     string
 			labels       map[string]string
@@ -98,7 +99,8 @@ func ExtractResourcesFromHelmRelease(
 				continue
 			}
 
-			containers = deployment.Spec.Template.Spec.Containers
+			podSpec = deployment.Spec.Template.Spec
+			containers = podSpec.Containers
 			workloadName = deployment.Name
 
 			deployObj, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deployment.Name, metav1.GetOptions{})
@@ -114,7 +116,8 @@ func ExtractResourcesFromHelmRelease(
 				continue
 			}
 
-			containers = statefulSet.Spec.Template.Spec.Containers
+			podSpec = statefulSet.Spec.Template.Spec
+			containers = podSpec.Containers
 			workloadName = statefulSet.Name
 
 			stsObj, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, statefulSet.Name, metav1.GetOptions{})
@@ -130,7 +133,8 @@ func ExtractResourcesFromHelmRelease(
 				continue
 			}
 
-			containers = daemonSet.Spec.Template.Spec.Containers
+			podSpec = daemonSet.Spec.Template.Spec
+			containers = podSpec.Containers
 			workloadName = daemonSet.Name
 
 			dsObj, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, daemonSet.Name, metav1.GetOptions{})
@@ -146,7 +150,8 @@ func ExtractResourcesFromHelmRelease(
 				continue
 			}
 
-			containers = cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers
+			podSpec = cronJob.Spec.JobTemplate.Spec.Template.Spec
+			containers = podSpec.Containers
 			workloadName = cronJob.Name
 
 			cronJobObj, err := clientset.BatchV1().CronJobs(namespace).Get(ctx, cronJob.Name, metav1.GetOptions{})
@@ -159,6 +164,7 @@ func ExtractResourcesFromHelmRelease(
 		}
 
 		labels = resources.FilterLabels(labels)
+		podContainers := resources.PodContainersCount(podSpec)
 
 		for _, container := range containers {
 			resInfo := resources.ResourceInfo{
@@ -169,6 +175,8 @@ func ExtractResourcesFromHelmRelease(
 				Replicas:  replicas,
 				Container: container.Name,
 				Labels:    labels,
+
+				PodContainers: podContainers,
 			}
 
 			if container.Resources.Requests != nil {
