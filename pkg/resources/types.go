@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,6 +35,8 @@ type ResourceInfo struct {
 	Container string `json:"container"`
 	// Labels associated with the workload
 	Labels map[string]string `json:"labels,omitempty"`
+	// PodContainers is the number of containers in the workload pod, 0 if unknown
+	PodContainers int `json:"-"`
 	// Usage
 	CPUUsage int64 `json:"cpu_usage,omitempty"`    // millicores
 	MemUsage int64 `json:"memory_usage,omitempty"` // bytes
@@ -100,4 +103,18 @@ func ListOptions(labels map[string]string) metav1.ListOptions {
 	}
 
 	return listOptions
+}
+
+// PodContainersCount returns the number of containers running for the pod's lifetime:
+// regular containers plus native sidecars (init containers with restartPolicy Always).
+func PodContainersCount(spec v1.PodSpec) int {
+	count := len(spec.Containers)
+
+	for _, c := range spec.InitContainers {
+		if c.RestartPolicy != nil && *c.RestartPolicy == v1.ContainerRestartPolicyAlways {
+			count++
+		}
+	}
+
+	return count
 }

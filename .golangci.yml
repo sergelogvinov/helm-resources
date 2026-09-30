@@ -1,11 +1,7 @@
 version: "2"
 run:
   build-tags:
-    - integration
-    - integration_api
-    - integration_cli
-    - integration_k8s
-    - integration_provision
+    - e2e
   issues-exit-code: 1
   tests: true
 output:
@@ -57,6 +53,7 @@ linters:
     - wrapcheck
     - wsl
     - gomodguard
+    - exhaustruct_v5
 
     # temporarily disabled linters
     - noinlineerr
