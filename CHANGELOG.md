@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/sergelogvinov/helm-resources/compare/v0.6.0...v0.7.0) (2026-09-30)
+
+
+### Features
+
+* add custom metrics client ([5d73a7a](https://github.com/sergelogvinov/helm-resources/commit/5d73a7a5f4bb63d348dcf15dbabbb0a77ac867ef))
+
 ## [0.6.0](https://github.com/sergelogvinov/helm-resources/compare/v0.5.1...v0.6.0) (2026-09-01)
 
 
