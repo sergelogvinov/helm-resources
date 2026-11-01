@@ -3,7 +3,7 @@ module github.com/sergelogvinov/helm-resources
 go 1.27.1
 
 require (
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/common v0.72.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
